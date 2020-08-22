@@ -1,9 +1,9 @@
 <img alt="react-laag logo" src="./logo.jpg" />
 
-[![NPM](https://img.shields.io/npm/v/result-ts.svg)](https://www.npmjs.com/package/result-ts)
+[![NPM](https://img.shields.io/npm/v/typescript-result.svg)](https://www.npmjs.com/package/typescript-result)
 [![TYPESCRIPT](https://img.shields.io/badge/%3C%2F%3E-typescript-blue)](http://www.typescriptlang.org/)
-[![BUNDLEPHOBIA](https://badgen.net/bundlephobia/minzip/result-ts)](https://bundlephobia.com/result?p=result-ts)
-[![Weekly downloads](https://badgen.net/npm/dw/result-ts)](https://badgen.net/npm/dw/result-ts)
+[![BUNDLEPHOBIA](https://badgen.net/bundlephobia/minzip/typescript-result)](https://bundlephobia.com/result?p=typescript-result)
+[![Weekly downloads](https://badgen.net/npm/dw/typescript-result)](https://badgen.net/npm/dw/typescript-result)
 
 Heavily inspired by the Rust and Kotlin counterparts, this utility helps you with code that might fail in a declarative way.
 
@@ -43,21 +43,21 @@ Instead, we could express the outcome of code to be executed in the form of a Re
 ## Installation
 
 ```bash
-npm install --save result-ts
+npm install --save typescript-result
 ```
 
 or
 
 ```bash
-yarn add result-ts
+yarn add typescript-result
 ```
 
 ## Usage
 
-result-ts exposes a single type:
+typescript-result exposes a single type:
 
 ```ts
-import { Result } from "result-ts";
+import { Result } from "typescript-result";
 ```
 
 Basically `Result` is a container with a generic type: one for failure, and one for success:
@@ -71,7 +71,7 @@ Result<ErrorType, OkType>
 Let's refactor the `readStuffFromFile()` a bit:
 
 ```ts
-import { Result } from "result-ts";
+import { Result } from "typescript-result";
 
 class FileDoesNotExistError extends Error {}
 
@@ -309,7 +309,7 @@ const result = doA().map(value => doB(value)); // Result<ErrorA | ErrorB, string
 
 There are cases where a series of operations are performed that need to be treated as a 'unit of work'. In other words: if the last operation fails, de preceding operations should also fail, despite the fact that those preceding operations succeeded on their own. In such cases you probably want some kind of recovering a.k.a. a rollback.
 
-Fortunately, result-ts allows you to rollback your changes with the minimum amount of effort.
+Fortunately, typescript-result allows you to rollback your changes with the minimum amount of effort.
 
 ### Example
 

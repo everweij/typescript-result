@@ -1,5 +1,6 @@
 {
-  "version": "0.1.0",
+  "private": false,
+  "version": "1.0.0",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -29,9 +30,9 @@
     "singleQuote": false,
     "trailingComma": "es5"
   },
-  "name": "result-ts",
+  "name": "typescript-result",
   "author": "Erik Verweij",
-  "module": "dist/result-ts.esm.js",
+  "module": "dist/typescript-result.esm.js",
   "devDependencies": {
     "husky": "^4.2.5",
     "tsdx": "^0.13.2",

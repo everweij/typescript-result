@@ -15,10 +15,6 @@ describe("Result", () => {
         expect(result.isFailure()).toBe(false);
         expect((result as any).value).toBe(123);
       });
-
-      it("throws when an invalid value was passed", () => {
-        expect(() => Result.ok(null)).toThrow();
-      });
     });
 
     describe("Result.error()", () => {

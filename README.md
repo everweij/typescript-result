@@ -350,7 +350,7 @@ function updateUser(userId: string, thingA: string, thingB: string) {
     () => updateUserThingB(userId, thingB)
   );
 
-  if (result.isFailure()) {`
+  if (result.isFailure()) {
     // We received a failing result, let's rollback!
     // Since rollbacks themselves can also fail, we also receive a Result indicating whether the rollback succeeded or not
     const rollbackResult = await result.rollback();

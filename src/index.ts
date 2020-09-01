@@ -702,6 +702,13 @@ class Ok<
   toString(): string {
     return `Result.Ok(${this.value})`;
   }
+
+  /**
+   * **Creates and forwards a brand new Result out of the current error or value **
+   */
+  forward(): Result<unknown, OkType, RollbackFn> {
+    return Result.ok(this.value);
+  }
 }
 
 class Err<
@@ -726,5 +733,12 @@ class Err<
 
   toString(): string {
     return `Result.Error(${this.error})`;
+  }
+
+  /**
+   * **Creates and forwards a brand new Result out of the current error or value **
+   */
+  forward(): Result<ErrorType, unknown, RollbackFn> {
+    return Result.error(this.error);
   }
 }

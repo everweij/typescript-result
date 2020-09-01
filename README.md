@@ -38,7 +38,7 @@ The problem with this 'usual' try-catch approach is that:
 - it makes our code harder to reason about. We need to look at implementation details to discover what might go wrong.
 - it makes the control flow of our code harder to reason about, especially with multiple (nested) try-catch statements
 
-Instead, we could express the outcome of code to be executed in the form of a Return-type. People using your code will be explicitly confronted with the fact that code potentially might fail, and will know upfront what kind of errors they can expect.
+Instead, we could express the outcome of code to be executed in the form of a Result-type. People using your code will be explicitly confronted with the fact that code potentially might fail, and will know upfront what kind of errors they can expect.
 
 ## Installation
 
@@ -303,6 +303,36 @@ function doA(): Result<ErrorA, number> {}
 function doB(value: number): Result<ErrorB, string> {}
 
 const result = doA().map(value => doB(value)); // Result<ErrorA | ErrorB, string>
+```
+
+#### Result.forward()
+
+Creates and forwards a brand new Result out of the current error or value.
+This is useful if you want to return early after failure.
+
+```ts
+class ErrorA extends Error {}
+class ErrorB extends Error {}
+
+function doA(): Result<ErrorA, number> {}
+function doB(): Result<ErrorB, number> {}
+
+function performAction(): Result<ErrorA | ErrorB, number> {
+  const resultA = doA();
+  if (resultA.isFailure()) {
+    return resultA.forward();
+  }
+
+  const resultB = doA();
+  if (resultB.isFailure()) {
+    return resultB.forward();
+  }
+
+  // from here both 'a' and 'b' are valid values
+  const [a, b] = [resultA.value, resultB.value];
+
+  return a + b;
+}
 ```
 
 ## Rollbacks

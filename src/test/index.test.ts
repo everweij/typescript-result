@@ -452,5 +452,15 @@ describe("Result", () => {
         expect((resultError as any).error).toBe(ERROR);
       });
     });
+
+    describe("Result#forward", () => {
+      it("forwards a error or value into a new Result", () => {
+        const error = Result.error(ERROR);
+        expect(error.forward().errorOrNull()).toBe(ERROR);
+
+        const success = Result.ok("success");
+        expect(success.forward().getOrNull()).toBe("success");
+      });
+    });
   });
 });

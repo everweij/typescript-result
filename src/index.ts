@@ -706,7 +706,7 @@ class Ok<
   /**
    * **Creates and forwards a brand new Result out of the current error or value **
    */
-  forward(): Result<unknown, OkType, RollbackFn> {
+  forward(): Result<any, OkType, RollbackFn> {
     return Result.ok(this.value);
   }
 }
@@ -738,7 +738,7 @@ class Err<
   /**
    * **Creates and forwards a brand new Result out of the current error or value **
    */
-  forward(): Result<ErrorType, unknown, RollbackFn> {
+  forward(): Result<ErrorType, any, RollbackFn> {
     return Result.error(this.error);
   }
 }

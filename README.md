@@ -131,7 +131,7 @@ function doStuff(value: number): Result<Error, number> {
 
 #### Result.safe
 
-Functions as a try-catch, returning the return-value of the callback on success, or the predefined error or caught error on failure:
+Functions as a try-catch, returning the return-value of the callback on success, or the predefined error(-class) or caught error on failure:
 
 ```ts
 // with caught error...
@@ -147,6 +147,17 @@ const result = Result.safe(() => {
 class CustomError extends Error {}
 
 const result = Result.safe(new CustomError("Custom error!"), () => {
+  let value = 2;
+
+  // code that might throw...
+
+  return value;
+}); // Result<CustomError, number>
+
+// with predefined error-class...
+class CustomError extends Error {}
+
+const result = Result.safe(CustomError, () => {
   let value = 2;
 
   // code that might throw...
@@ -292,7 +303,7 @@ const value = result.getOrThrow();
 #### Result.map()
 
 Maps a result to another result.
-If the result is success, it will call the callback-function with the encapsulated value, which must return another Result.
+If the result is success, it will call the callback-function with the encapsulated value, which returnr another Result.
 If the result is failure, it will ignore the callback-function, and will return the initial Result (error)
 
 ```ts
@@ -302,7 +313,13 @@ class ErrorB extends Error {}
 function doA(): Result<ErrorA, number> {}
 function doB(value: number): Result<ErrorB, string> {}
 
-const result = doA().map(value => doB(value)); // Result<ErrorA | ErrorB, string>
+// nested results will flat-map to a single Result...
+const result1 = doA().map(value => doB(value)); // Result<ErrorA | ErrorB, string>
+
+// ...or transform the successful value right away
+// note: underneath, the callback is wrapped inside Result.safe() in case the callback
+// might throw
+const result2 = doA().map(value => value * 2); // Result<ErrorA | Error, number>
 ```
 
 #### Result.forward()

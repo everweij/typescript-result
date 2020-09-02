@@ -65,25 +65,57 @@ describe("Result", () => {
         expect((result as any).value).toBe(123);
       });
 
-      it("returns an Result.Error when the callbacks throws", () => {
-        const result = Result.safe(ERROR, () => {
-          throw new Error("This should fail");
-          // @ts-ignore
+      it("allows you to pass in a Error constructor", () => {
+        class CustomError extends Error {
+          isCustom = true;
+        }
+        const result = Result.safe(CustomError, () => {
+          throw new Error("random error");
           return 1;
         });
 
-        expect(result.isFailure()).toBe(true);
-        expect((result as any).error).toBe(ERROR);
+        expect((result as any).error.isCustom).toBe(true);
       });
 
-      it("returns an Result.Error when the callbacks throws", async () => {
-        const result = await Result.safe(ERROR, async () => {
-          throw new Error("This should fail");
-          // @ts-ignore
+      it("allows you to pass in a Error constructor ASYNC", async () => {
+        class CustomError extends Error {
+          isCustom = true;
+        }
+        const result = await Result.safe(CustomError, async () => {
+          throw new Error("random error");
           return 1;
         });
 
-        expect(result.isFailure()).toBe(true);
+        expect((result as any).error.isCustom).toBe(true);
+      });
+
+      it("merges a returned Result when callback is successful", () => {
+        class CustomError {}
+        const result = Result.safe(
+          (): Result<CustomError, number> => {
+            return Result.ok(1);
+          }
+        );
+
+        expect((result as any).value).toBe(1);
+      });
+
+      it("merges a returned Result when callback is successful ASYNC", async () => {
+        const result = await Result.safe(async () => {
+          return Result.ok(1);
+        });
+
+        expect((result as any).value).toBe(1);
+      });
+
+      it("merges a returned Result when callback is failure", () => {
+        class CustomError {}
+        const result = Result.safe(
+          (): Result<CustomError, number> => {
+            return Result.error(ERROR);
+          }
+        );
+
         expect((result as any).error).toBe(ERROR);
       });
     });
@@ -429,26 +461,34 @@ describe("Result", () => {
 
     describe("Result#map()", () => {
       it("maps the value to another Result on success, returns Result.Error on failure", () => {
-        const resultOk = Result.ok<Error, number>(1).map(val =>
-          Result.ok(val * 2)
-        );
+        const resultOk = Result.ok<Error, number>(1).map(val => val * 2);
         expect((resultOk as any).value).toBe(2);
 
-        const resultError = Result.error<Error, number>(ERROR).map(val =>
+        const resultNestedOk = Result.ok<Error, number>(1).map(val =>
           Result.ok(val * 2)
+        );
+        expect((resultNestedOk as any).value).toBe(2);
+
+        const resultError = Result.error<Error, number>(ERROR).map(val =>
+          Result.ok<Error, number>(val * 2)
         );
         expect((resultError as any).error).toBe(ERROR);
       });
 
       it("maps the value to another Result on success, returns Result.Error on failure ASYNC", async () => {
+        const resultNestedOk = await Result.ok<Error, number>(1).map(
+          async val => val * 2
+        );
+        expect((resultNestedOk as any).value).toBe(2);
+
         const resultOk = await Result.ok<Error, number>(1).map(async val =>
-          Result.ok(val * 2)
+          Result.ok<Error, number>(val * 2)
         );
         expect((resultOk as any).value).toBe(2);
 
         const resultError = await Result.error<Error, number>(
           ERROR
-        ).map(async val => Result.ok(val * 2));
+        ).map(async val => Result.ok<Error, number>(val * 2));
         expect((resultError as any).error).toBe(ERROR);
       });
     });

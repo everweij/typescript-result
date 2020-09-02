@@ -6,6 +6,10 @@ function isAsyncFn(fn: Function) {
   return fn.constructor.name === "AsyncFunction";
 }
 
+function isResult(value: unknown): value is Result<any, any, any> {
+  return value instanceof Ok || value instanceof Err;
+}
+
 interface SyncThenable {
   isSync: true;
   then<Fn extends () => Promise<any>>(cb: Fn): ReturnType<Fn>;
@@ -228,7 +232,8 @@ interface IResult<ErrorType, OkType> {
 
   /**
    * **Maps a result to another result**
-   * If the result is success, it will call the callback-function with the encapsulated value, which must return another Result.
+   * If the result is success, it will call the callback-function with the encapsulated value, which returns another Result.
+   * Nested Results are supported, which will basically act as a flat-map.
    * If the result is failure, it will ignore the callback-function.
    *
    * Example:
@@ -245,15 +250,29 @@ interface IResult<ErrorType, OkType> {
    *  // ...
    * }
    *
-   * const result = doA().map(value => doB(value)); // Result<ErrorA | ErrorB, string>
+   * // nested results will flat-map to a single Result...
+   * const result1 = doA().map(value => doB(value)); // Result<ErrorA | ErrorB, string>
+   *
+   * // ...or transform the successful value right away
+   * // note: underneath, the callback is wrapped inside Result.safe() in case the callback
+   * // might throw
+   * const result2 = doA().map(value => value * 2); // Result<ErrorA | Error, number>
    * ```
    */
-  map<T extends Result<any, any, any>>(
-    fn: (value: OkType) => T
-  ): JoinErrorTypes<ErrorType, T>;
-  map<T extends Result<any, any, any>>(
+  map<T>(
     fn: (value: OkType) => Promise<T>
-  ): Promise<JoinErrorTypes<ErrorType, T>>;
+  ): Promise<
+    JoinErrorTypes<
+      ErrorType,
+      T extends Result<any, any, any> ? T : Result<Error, T, any>
+    >
+  >;
+  map<T>(
+    fn: (value: OkType) => T
+  ): JoinErrorTypes<
+    ErrorType,
+    T extends Result<any, any, any> ? T : Result<Error, T, any>
+  >;
 
   /**
    * **Rolls back things that were successful**
@@ -380,6 +399,10 @@ export namespace Result {
     return new Err<ErrorType, OkType, RollbackFn>(error, rollbackFn);
   }
 
+  type SafeReturnType<E, T> = T extends Result<any, any, any>
+    ? Result<E | InferErrorType<T>, InferOkType<T>, never>
+    : Result<E, T, never>;
+
   /**
    * **Functions as a try-catch, returning the return-value of the callback on success, or the predefined error or caught error on failure **
    *
@@ -404,39 +427,65 @@ export namespace Result {
    *
    *   return value;
    * }); // Result<CustomError, number>
+   *
+   * // with predefined error Class...
+   * const result = Result.safe(CustomError, () => {
+   *   let value = 2;
+   *
+   *   // code that might throw...
+   *
+   *   return value;
+   * }); // Result<CustomError, number>
    * ```
    */
-  export function safe<ErrorType, OkType>(
-    fn: () => Promise<OkType>
-  ): Promise<Result<Error, OkType, never>>;
-  export function safe<ErrorType, OkType>(
-    fn: () => OkType
-  ): Result<Error, OkType, never>;
-  export function safe<ErrorType, OkType>(
-    err: ErrorType,
-    fn: () => Promise<OkType>
-  ): Promise<Result<ErrorType, OkType, never>>;
-  export function safe<ErrorType, OkType>(
-    err: ErrorType,
-    fn: () => OkType
-  ): Result<ErrorType, OkType, never>;
+  export function safe<T>(
+    fn: () => Promise<T>
+  ): Promise<SafeReturnType<Error, T>>;
+  export function safe<T>(fn: () => T): SafeReturnType<Error, T>;
+  export function safe<ErrorType, T>(
+    err: ErrorType | (new (...args: any[]) => ErrorType),
+    fn: () => Promise<T>
+  ): Promise<SafeReturnType<ErrorType, T>>;
+  export function safe<ErrorType, T>(
+    err: ErrorType | (new (...args: any[]) => ErrorType),
+    fn: () => T
+  ): SafeReturnType<ErrorType, T>;
   export function safe(errOrFn: any, fn?: any) {
     const hasCustomError = fn !== undefined;
 
     const execute = hasCustomError ? fn : errOrFn;
+
+    function getError(caughtError: Error) {
+      if (!hasCustomError) {
+        // just forward the original Error
+        return caughtError;
+      }
+
+      // pass the caught error to the specified constructor
+      if (typeof errOrFn === "function") {
+        return new errOrFn(caughtError);
+      }
+
+      // return predefined error
+      return errOrFn;
+    }
 
     try {
       const resultOrPromise = execute();
 
       if (resultOrPromise instanceof Promise) {
         return resultOrPromise
-          .then(okValue => Result.ok(okValue))
-          .catch(caughtError => error(hasCustomError ? errOrFn : caughtError));
+          .then(okValue => {
+            return isResult(okValue) ? okValue : Result.ok(okValue);
+          })
+          .catch(caughtError => error(getError(caughtError)));
       }
 
-      return ok(resultOrPromise);
+      return isResult(resultOrPromise)
+        ? resultOrPromise
+        : Result.ok(resultOrPromise);
     } catch (caughtError) {
-      return error(hasCustomError ? errOrFn : caughtError);
+      return error(getError(caughtError));
     }
   }
 
@@ -650,20 +699,28 @@ abstract class Base<
     throw new Error("Method not implemented.");
   }
 
-  map<T extends Result<any, any, any>>(
-    fn: (value: OkType) => T
-  ): JoinErrorTypes<ErrorType, T>;
-  map<T extends Result<any, any, any>>(
+  map<T>(
     fn: (value: OkType) => Promise<T>
-  ): Promise<JoinErrorTypes<ErrorType, T>>;
+  ): Promise<
+    JoinErrorTypes<
+      ErrorType,
+      T extends Result<any, any, any> ? T : Result<Error, T, any>
+    >
+  >;
+  map<T>(
+    fn: (value: OkType) => T
+  ): JoinErrorTypes<
+    ErrorType,
+    T extends Result<any, any, any> ? T : Result<Error, T, any>
+  >;
   map(fn: any) {
     if (this.isFailure()) {
       return isAsyncFn(fn) ? Promise.resolve(this) : this;
     }
 
-    const result = fn((this as any).value) as any;
+    const result = Result.safe(() => fn((this as any).value) as any);
 
-    return result;
+    return result as any;
   }
 
   rollback(): RollbackFn extends RollbackFunction

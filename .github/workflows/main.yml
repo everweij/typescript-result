@@ -1,0 +1,41 @@
+name: Main workflow
+on:
+  push:
+    branches:
+      - main
+      - next
+
+concurrency:
+  cancel-in-progress: true
+  group: merge-${{ github.ref }}
+
+jobs:
+  BuildApp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone the repository
+        uses: actions/checkout@v4
+
+      - name: Setup NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test:ci
+
+      - name: Coverage
+        run: npm run coverage
+
+      - name: Build
+        run: npm run build

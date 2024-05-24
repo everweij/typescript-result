@@ -1,5 +1,16 @@
 {
-    "editor.formatOnSave": true,
-    "editor.tabSize": 2,
-    "typescript.tsdk": "node_modules/typescript/lib"
+  "editor.codeActionsOnSave": {
+    "quickfix.biome": "explicit"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "typescript.reportStyleChecksAsWarnings": false,
+  "prettier.enable": false
 }

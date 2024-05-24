@@ -1,42 +1,58 @@
 {
-  "private": false,
-  "version": "1.2.0",
-  "license": "MIT",
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
-  "files": [
-    "dist",
-    "src"
-  ],
-  "engines": {
-    "node": ">=10"
-  },
-  "scripts": {
-    "start": "tsdx watch",
-    "build": "tsdx build",
-    "test": "tsdx test",
-    "lint": "tsdx lint",
-    "prepare": "tsdx build"
-  },
-  "peerDependencies": {},
-  "husky": {
-    "hooks": {
-      "pre-commit": "tsdx lint"
-    }
-  },
-  "prettier": {
-    "printWidth": 80,
-    "semi": true,
-    "singleQuote": false,
-    "trailingComma": "es5"
-  },
-  "name": "typescript-result",
-  "author": "Erik Verweij",
-  "module": "dist/typescript-result.esm.js",
-  "devDependencies": {
-    "husky": "^4.2.5",
-    "tsdx": "^0.13.2",
-    "tslib": "^2.0.0",
-    "typescript": "^3.9.7"
-  }
+	"private": false,
+	"name": "typescript-result",
+	"version": "2.0.0-beta.1",
+	"description": "A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable.",
+	"keywords": [
+		"Result",
+		"Typescript",
+		"error handling"
+	],
+	"author": {
+		"name": "Erik Verweij",
+		"url": "https://github.com/everweij"
+	},
+	"repository": "https://github.com/everweij/typescript-result",
+	"bugs": {
+		"url": "https://github.com/everweij/typescript-result/issues/new"
+	},
+	"license": "MIT",
+	"files": [
+		"dist"
+	],
+	"main": "dist/index.js",
+	"type": "module",
+	"module": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"default": "./dist/index.js",
+				"types": "./dist/index.d.ts"
+			},
+			"require": {
+				"default": "./dist/index.cjs",
+				"types": "./dist/index.d.cts"
+			}
+		}
+	},
+	"scripts": {
+		"test": "vitest",
+		"test:ci": "vitest run",
+		"coverage": "vitest run --coverage",
+		"lint": "biome check --apply src",
+		"typecheck": "tsc --noEmit",
+		"prepare": "husky",
+		"build": "tsup",
+		"gzip-size": "npx gzip-size-cli ./dist/index.js"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "1.7.3",
+		"@types/node": "^20.12.12",
+		"@vitest/coverage-v8": "^1.6.0",
+		"husky": "^9.0.11",
+		"tsup": "^8.0.2",
+		"typescript": "^5.4.5",
+		"vitest": "^1.6.0"
+	}
 }

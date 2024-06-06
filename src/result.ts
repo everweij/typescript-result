@@ -47,46 +47,171 @@ type AccountForFunctionThrowing<Items extends any[]> =
 			? NativeError
 			: never;
 
+/**
+ * Represents the asynchronous outcome of an operation that can either succeed or fail.
+ */
 export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
+	/**
+	 * Utility getter to check if the current instance is an `AsyncResult`.
+	 */
 	get isAsyncResult(): true {
 		return true;
 	}
 
+	/**
+	 * @returns the encapsulated error if the result is a failure, otherwise `null`.
+	 */
 	async errorOrNull(): Promise<ErrorOr<Value, Err, null>> {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.errorOrNull();
 	}
 
+	/**
+	 * @returns the encapsulated value if the result is successful, otherwise `null`.
+	 */
 	async getOrNull(): Promise<ValueOr<Value, Err, null>> {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.getOrNull();
 	}
 
+	/**
+	 * Retrieves the encapsulated value of the result, or a default value if the result is a failure.
+	 *
+	 * @param defaultValue The value to return if the result is a failure.
+	 *
+	 * @returns The encapsulated value if the result is successful, otherwise the default value.
+	 *
+	 * @example
+	 * obtaining the value of a result, or a default value
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const value = await result.getOrDefault(0); // number
+	 * ```
+	 *
+	 * @example
+	 * using a different type for the default value
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const value = await result.getOrDefault("default"); // number | string
+	 * ```
+	 */
 	async getOrDefault<Else>(defaultValue: Value | Else): Promise<Value | Else> {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.getOrDefault(defaultValue);
 	}
 
+	/**
+	 * Retrieves the value of the result, or transforms the error using the {@link onFailure} callback into a value.
+	 *
+	 * @param onFailure callback function which allows you to transform the error into a value. The callback can be async as well.
+	 * @returns either the value if the result is successful, or the transformed error.
+	 *
+	 * @example
+	 * transforming the error into a value
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const value = await result.getOrElse((error) => 0); // number
+	 * ```
+	 *
+	 * @example
+	 * using an async callback
+	 * ```ts
+	 * const value = await result.getOrElse(async (error) => 0); // number
+	 * ```
+	 */
 	async getOrElse<Else>(onFailure: (error: Err) => Else) {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.getOrElse(onFailure) as Promise<Value | Unwrap<Else>>;
 	}
 
+	/**
+	 * Retrieves the encapsulated value of the result, or throws an error if the result is a failure.
+	 *
+	 * @returns The encapsulated value if the result is successful.
+	 *
+	 * @throws an error if the result is a failure.
+	 *
+	 * [!IMPORTANT]
+	 * > The error thrown will have the original error set as the `cause` property.
+	 *
+	 * @example
+	 * obtaining the value of a result, or throwing an error
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const value = await result.getOrThrow(); // number
+	 * ```
+	 */
 	async getOrThrow(): Promise<Value> {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.getOrThrow();
 	}
 
+	/**
+	 * Returns the result of the {@link onSuccess} callback when the result represents success or
+	 * the result of the {@link onFailure} callback when the result represents a failure.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the callbacks are not caught, so it is your responsibility
+	 * > to handle these exceptions
+	 *
+	 * @param onSuccess callback function to run when the result is successful. The callback can be async as well.
+	 * @param onFailure callback function to run when the result is a failure. The callback can be async as well.
+	 * @returns the result of the callback that was executed.
+	 *
+	 * @example
+	 * folding a result to a response-like object
+	 *
+	 * ```ts
+	 * declare const result: AsyncResult<User, NotFoundError | UserDeactivatedError>;
+	 *
+	 * const response = await result.fold(
+	 *   (user) => ({ status: 200, body: user }),
+	 *   (error) => {
+	 *     switch (error.type) {
+	 *       case "not-found":
+	 *         return { status: 404, body: "User not found" };
+	 *       case "user-deactivated":
+	 *         return { status: 403, body: "User is deactivated" };
+	 *     }
+	 *   }
+	 * );
+	 * ```
+	 */
 	async fold<SuccessResult, FailureResult>(
 		onSuccess: (value: Value) => SuccessResult,
 		onFailure: (error: Err) => FailureResult,
 	) {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.fold(onSuccess, onFailure) as Promise<
 			Unwrap<SuccessResult> | Unwrap<FailureResult>
 		>;
 	}
 
+	/**
+	 * Calls the {@link action} callback when the result represents a failure. It is meant to be used for
+	 * side-effects and the operation does not modify the result itself.
+	 *
+	 * @param action callback function to run when the result is a failure. The callback can be async as well.
+	 * @returns the original instance of the result.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions
+	 *
+	 * @example
+	 * adding logging between operations
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * result
+	 *   .onFailure((error) => console.error("I'm failing!", error))
+	 *   .map((value) => value * 2); // proceed with other operations
+	 * ```
+	 */
 	onFailure(action: (error: Err) => void): AsyncResult<Value, Err> {
 		return new AsyncResult<Value, Err>((resolve, reject) =>
 			this.then(async (result) => {
@@ -100,6 +225,35 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 		);
 	}
 
+	/**
+	 * Calls the {@link action} callback when the result represents a success. It is meant to be used for
+	 * side-effects and the operation does not modify the result itself.
+	 *
+	 * @param action callback function to run when the result is successful. The callback can be async as well.
+	 * @returns the original instance of the result.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions
+	 *
+	 * @example
+	 * adding logging between operations
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * result
+	 *   .onSuccess((value) => console.log("I'm a success!", value))
+	 *   .map((value) => value * 2); // proceed with other operations
+	 * ```
+	 *
+	 * @example
+	 * using an async callback
+	 * ```ts
+	 * declare const result: AsyncResultResult<number, Error>;
+	 *
+	 * const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(value));
+	 * ```
+	 */
 	onSuccess(action: (value: Value) => void): AsyncResult<Value, Err> {
 		return new AsyncResult<Value, Err>((resolve, reject) =>
 			this.then(async (result) => {
@@ -113,6 +267,55 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 		);
 	}
 
+	/**
+	 * Transforms the value of a successful result using the {@link transform} callback.
+	 * The {@link transform} callback can also return other {@link Result} or {@link AsyncResult} instances,
+	 * which will be returned as-is (the `Error` types will be merged).
+	 * The operation will be ignored if the result represents a failure.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode AsyncResult.mapCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * transforming the value of a result
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const transformed = result.map((value) => value * 2); // AsyncResult<number, Error>
+	 * ```
+	 *
+	 * @example
+	 * returning a result instance
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 * declare function multiplyByTwo(value: number): Result<number, Error>;
+	 *
+	 * const transformed = result.map((value) => multiplyByTwo(value)); // AsyncResult<number, Error>
+	 * ```
+	 *
+	 * @example
+	 * doing an async transformation
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const transformed = result.map(async (value) => value * 2); // AsyncResult<number, Error>
+	 * ```
+	 *
+	 * @example
+	 * returning an async result instance
+	 *
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 * declare function storeValue(value: number): AsyncResult<boolean, Error>;
+	 *
+	 * const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
+	 * ```
+	 */
 	map<ReturnType>(transform: (value: Value) => ReturnType) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
@@ -148,6 +351,14 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				: AsyncResult<ReturnType, Err>;
 	}
 
+	/**
+	 * Like {@linkcode AsyncResult.map} it transforms the value of a successful result using the {@link transform} callback.
+	 * In addition, it catches any exceptions that might be thrown inside the {@link transform} callback and encapsulates them
+	 * in a failed result.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
+	 */
 	mapCatching<ReturnType>(transform: (value: Value) => ReturnType) {
 		return new AsyncResult<any, any>((resolve) => {
 			this.map(transform)
@@ -162,6 +373,34 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				: AsyncResult<ReturnType, Err | NativeError>;
 	}
 
+	/**
+	 * Transforms a failed result using the {@link onFailure} callback into a successful result. Useful for falling back to
+	 * other scenarios when a previous operation fails.
+	 * The {@link onFailure} callback can also return other {@link Result} or {@link AsyncResult} instances,
+	 * which will be returned as-is.
+	 * After a recovery, logically, the result can only be a success. Therefore, the error type is set to `never`, unless
+	 * the {@link onFailure} callback returns a result-instance with another error type.
+	 *
+	 * @param onFailure callback function to transform the error of the result. The callback can be async as well.
+	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
+	 * if it represents a success.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link onFailure} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode AsyncResult.recoverCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * transforming the error into a value
+	 * Note: Since we recover after trying to persist in the database, we can assume that the `DbError` has been taken care
+	 * of and therefore it has been removed from the final result.
+	 * ```ts
+	 * declare function persistInDB(item: Item): AsyncResult<Item, DbError>;
+	 * declare function persistLocally(item: Item): AsyncResult<Item, IOError>;
+	 *
+	 * persistInDB(item).recover(() => persistLocally(item)); // AsyncResult<Item, IOError>
+	 * ```
+	 */
 	recover<ReturnType>(onFailure: (error: Err) => ReturnType) {
 		return new AsyncResult((resolve, reject) =>
 			this.then(async (result) => {
@@ -181,6 +420,15 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				: AsyncResult<Value | ReturnType, never>;
 	}
 
+	/**
+	 * Like {@linkcode AsyncResult.recover} it transforms a failed result using the {@link onFailure} callback into a successful result.
+	 * In addition, it catches any exceptions that might be thrown inside the {@link onFailure} callback and encapsulates them
+	 * in a failed result.
+	 *
+	 * @param onFailure callback function to transform the error of the result. The callback can be async as well.
+	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
+	 * if it represents a success.
+	 */
 	recoverCatching<ReturnType>(onFailure: (error: Err) => ReturnType) {
 		return new AsyncResult<any, any>((resolve) =>
 			this.then((result) => {
@@ -195,14 +443,23 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				: AsyncResult<Value | ReturnType, NativeError>;
 	}
 
+	/**
+	 * Print-friendly representation of the `AsyncResult` instance.
+	 */
 	override toString(): string {
 		return "AsyncResult";
 	}
 
+	/**
+	 * @internal
+	 */
 	static error<Error>(error: Error): AsyncResult<never, Error> {
 		return new AsyncResult((resolve) => resolve(Result.error(error)));
 	}
 
+	/**
+	 * @internal
+	 */
 	static ok<Value>(value: Value): AsyncResult<Value, never> {
 		return new AsyncResult((resolve) => resolve(Result.ok(value)));
 	}
@@ -239,20 +496,77 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	}
 }
 
+/**
+ * Represents the outcome of an operation that can either succeed or fail.
+ */
 export class Result<Value, Err> {
-	constructor(
+	private constructor(
 		private readonly _value: Value,
 		private readonly _error: Err,
 	) {}
 
+	/**
+	 * Utility getter the current instance is a `Result`.
+	 */
 	get isResult(): true {
 		return true;
 	}
 
+	/**
+	 * Retrieves the encapsulated value of the result.
+	 *
+	 * @returns The value if the operation was successful, otherwise `undefined`.
+	 *
+	 * __Note:__ You can use {@linkcode Result.isOk} to narrow down the type to a successful result.
+	 *
+	 * @example
+	 * obtaining the value of a result, without checking if it's successful
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * result.value; // number | undefined
+	 * ```
+	 *
+	 * @example
+	 * obtaining the value of a result, after checking for success
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * if (result.isOk()) {
+	 *   result.value; // number
+	 * }
+	 * ```
+	 */
 	get value(): ValueOr<Value, Err, undefined> {
 		return this._value as any;
 	}
 
+	/**
+	 * Retrieves the encapsulated error of the result.
+	 *
+	 * @returns The error if the operation failed, otherwise `undefined`.
+	 *
+	 * [!NOTE]
+	 * > You can use {@linkcode Result.isError} to narrow down the type to a failed result.
+	 *
+	 * @example
+	 * obtaining the value of a result, without checking if it's a failure
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * result.error; // Error | undefined
+	 * ```
+	 *
+	 * @example
+	 * obtaining the error of a result, after checking for failure
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * if (result.isError()) {
+	 *   result.error; // Error
+	 * }
+	 * ```
+	 */
 	get error(): ErrorOr<Value, Err, undefined> {
 		return this._error as any;
 	}
@@ -265,26 +579,105 @@ export class Result<Value, Err> {
 		return this.error !== undefined;
 	}
 
+	/**
+	 * Type guard that checks whether the result is successful.
+	 *
+	 * @returns `true` if the result is successful, otherwise `false`.
+	 *
+	 * @example
+	 * checking if a result is successful
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * if (result.isOk()) {
+	 * 	 result.value; // number
+	 * }
+	 * ```
+	 */
 	isOk(): this is Result<[Value] extends [never] ? AnyValue : Value, never> {
 		return this.success;
 	}
 
+	/**
+	 * Type guard that checks whether the result is successful.
+	 *
+	 * @returns `true` if the result represents a failure, otherwise `false`.
+	 *
+	 * @example
+	 * checking if a result represents a failure
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * if (result.isError()) {
+	 * 	 result.error; // Error
+	 * }
+	 * ```
+	 */
 	isError(): this is Result<never, [Err] extends [never] ? AnyValue : Err> {
 		return this.failure;
 	}
 
+	/**
+	 * @returns the encapsulated error if the result is a failure, otherwise `null`.
+	 */
 	errorOrNull() {
 		return (this.failure ? this._error : null) as ErrorOr<Value, Err, null>;
 	}
 
+	/**
+	 * @returns the encapsulated value if the result is successful, otherwise `null`.
+	 */
 	getOrNull() {
 		return (this.success ? this._value : null) as ValueOr<Value, Err, null>;
 	}
 
+	/**
+	 * Retrieves the value of the result, or a default value if the result is a failure.
+	 *
+	 * @param defaultValue The value to return if the result is a failure.
+	 *
+	 * @returns The encapsulated value if the result is successful, otherwise the default value.
+	 *
+	 * @example
+	 * obtaining the value of a result, or a default value
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const value = result.getOrDefault(0); // number
+	 * ```
+	 *
+	 * @example
+	 * using a different type for the default value
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const value = result.getOrDefault("default"); // number | string
+	 * ```
+	 */
 	getOrDefault<Else>(defaultValue: Else): Value | Else {
 		return this.success ? this._value : defaultValue;
 	}
 
+	/**
+	 * Retrieves the value of the result, or transforms the error using the {@link onFailure} callback into a value.
+	 *
+	 * @param onFailure callback function which allows you to transform the error into a value. The callback can be async as well.
+	 * @returns either the value if the result is successful, or the transformed error.
+	 *
+	 * @example
+	 * transforming the error into a value
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const value = result.getOrElse((error) => 0); // number
+	 * ```
+	 *
+	 * @example
+	 * using an async callback
+	 * ```ts
+	 * const value = await result.getOrElse(async (error) => 0); // Promise<number>
+	 * ```
+	 */
 	getOrElse<Else>(
 		onFailure: (error: Err) => Else,
 	): Else extends Promise<infer U> ? Promise<Value | U> : Value | Else {
@@ -297,6 +690,24 @@ export class Result<Value, Err> {
 		return this.success ? this._value : (onFailure(this._error) as any);
 	}
 
+	/**
+	 * Retrieves the value of the result, or throws an error if the result is a failure.
+	 *
+	 * @returns The value if the result is successful.
+	 *
+	 * @throws an error if the result is a failure.
+	 *
+	 * [!IMPORTANT]
+	 * > The error thrown will have the original error set as the `cause` property.
+	 *
+	 * @example
+	 * obtaining the value of a result, or throwing an error
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const value = result.getOrThrow(); // number
+	 * ```
+	 */
 	getOrThrow(): Value {
 		if (this.success) {
 			return this._value;
@@ -307,6 +718,37 @@ export class Result<Value, Err> {
 		});
 	}
 
+	/**
+	 * Returns the result of the {@link onSuccess} callback when the result represents success or
+	 * the result of the {@link onFailure} callback when the result represents a failure.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the callbacks are not caught, so it is your responsibility
+	 * > to handle these exceptions
+	 *
+	 * @param onSuccess callback function to run when the result is successful. The callback can be async as well.
+	 * @param onFailure callback function to run when the result is a failure. The callback can be async as well.
+	 * @returns the result of the callback that was executed.
+	 *
+	 * @example
+	 * folding a result to a response-like object
+	 *
+	 * ```ts
+	 * declare const result: Result<User, NotFoundError | UserDeactivatedError>;
+	 *
+	 * const response = result.fold(
+	 *   (user) => ({ status: 200, body: user }),
+	 *   (error) => {
+	 *     switch (error.type) {
+	 *       case "not-found":
+	 *         return { status: 404, body: "User not found" };
+	 *       case "user-deactivated":
+	 *         return { status: 403, body: "User is deactivated" };
+	 *     }
+	 *   }
+	 * );
+	 * ```
+	 */
 	fold<SuccessResult, FailureResult>(
 		onSuccess: (value: Value) => SuccessResult,
 		onFailure: (error: Err) => FailureResult,
@@ -324,6 +766,27 @@ export class Result<Value, Err> {
 			: SuccessResult | FailureResult;
 	}
 
+	/**
+	 * Calls the {@link action} callback when the result represents a failure. It is meant to be used for
+	 * side-effects and the operation does not modify the result itself.
+	 *
+	 * @param action callback function to run when the result is a failure. The callback can be async as well.
+	 * @returns the original instance of the result.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions
+	 *
+	 * @example
+	 * adding logging between operations
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * result
+	 *   .onFailure((error) => console.error("I'm failing!", error))
+	 *   .map((value) => value * 2); // proceed with other operations
+	 * ```
+	 */
 	onFailure<ReturnValue>(
 		action: (error: Err) => ReturnValue,
 	): ReturnValue extends AnyPromise ? AsyncResult<Value, Err> : this {
@@ -345,6 +808,35 @@ export class Result<Value, Err> {
 		return isAsync ? AsyncResult.ok(this._value) : (this as any);
 	}
 
+	/**
+	 * Calls the {@link action} callback when the result represents a success. It is meant to be used for
+	 * side-effects and the operation does not modify the result itself.
+	 *
+	 * @param action callback function to run when the result is successful. The callback can be async as well.
+	 * @returns the original instance of the result. If the callback is async, it returns a new {@link AsyncResult} instance.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions
+	 *
+	 * @example
+	 * adding logging between operations
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * result
+	 *   .onSuccess((value) => console.log("I'm a success!", value))
+	 *   .map((value) => value * 2); // proceed with other operations
+	 * ```
+	 *
+	 * @example
+	 * using an async callback
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(value));
+	 * ```
+	 */
 	onSuccess(action: (value: Value) => Promise<void>): AsyncResult<Value, Err>;
 	onSuccess(action: (value: Value) => void): this;
 	onSuccess(action: (value: Value) => unknown): unknown {
@@ -364,6 +856,56 @@ export class Result<Value, Err> {
 		return isAsync ? AsyncResult.error(this._error) : this;
 	}
 
+	/**
+	 * Transforms the value of a successful result using the {@link transform} callback.
+	 * The {@link transform} callback can also return other {@link Result} or {@link AsyncResult} instances,
+	 * which will be returned as-is (the `Error` types will be merged).
+	 * The operation will be ignored if the result represents a failure.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
+	 * if the transform function is async.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.mapCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * transforming the value of a result
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const transformed = result.map((value) => value * 2); // Result<number, Error>
+	 * ```
+	 *
+	 * @example
+	 * returning a result instance
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 * declare function multiplyByTwo(value: number): Result<number, Error>;
+	 *
+	 * const transformed = result.map((value) => multiplyByTwo(value)); // Result<number, Error>
+	 * ```
+	 *
+	 * @example
+	 * doing an async transformation
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const transformed = result.map(async (value) => value * 2); // AsyncResult<number, Error>
+	 * ```
+	 *
+	 * @example
+	 * returning an async result instance
+	 *
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 * declare function storeValue(value: number): AsyncResult<boolean, Error>;
+	 *
+	 * const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
+	 * ```
+	 */
 	map<ReturnType>(transform: (value: Value) => ReturnType) {
 		return (
 			this.success
@@ -380,6 +922,15 @@ export class Result<Value, Err> {
 				: Result<ReturnType, Err>;
 	}
 
+	/**
+	 * Like {@linkcode Result.map} it transforms the value of a successful result using the {@link transform} callback.
+	 * In addition, it catches any exceptions that might be thrown inside the {@link transform} callback and encapsulates them
+	 * in a failed result.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
+	 * if the transform function is async.
+	 */
 	mapCatching<ReturnType>(transform: (value: Value) => ReturnType) {
 		return (
 			this.success ? Result.try(() => transform(this._value)) : this
@@ -392,6 +943,34 @@ export class Result<Value, Err> {
 				: Result<ReturnType, Err | NativeError>;
 	}
 
+	/**
+	 * Transforms a failed result using the {@link onFailure} callback into a successful result. Useful for falling back to
+	 * other scenarios when a previous operation fails.
+	 * The {@link onFailure} callback can also return other {@link Result} or {@link AsyncResult} instances,
+	 * which will be returned as-is.
+	 * After a recovery, logically, the result can only be a success. Therefore, the error type is set to `never`, unless
+	 * the {@link onFailure} callback returns a result-instance with another error type.
+	 *
+	 * @param onFailure callback function to transform the error of the result. The callback can be async as well.
+	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
+	 * when the result represents a failure, or the original instance if it represents a success.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link onFailure} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.recoverCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * transforming the error into a value
+	 * Note: Since we recover after trying to persist in the database, we can assume that the `DbError` has been taken care
+	 * of and therefore it has been removed from the final result.
+	 * ```ts
+	 * declare function persistInDB(item: Item): Result<Item, DbError>;
+	 * declare function persistLocally(item: Item): Result<Item, IOError>;
+	 *
+	 * persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
+	 * ```
+	 */
 	recover<ReturnType>(onFailure: (error: Err) => ReturnType) {
 		return (
 			this.success
@@ -408,6 +987,15 @@ export class Result<Value, Err> {
 				: Result<Value | ReturnType, never>;
 	}
 
+	/**
+	 * Like {@linkcode Result.recover} it transforms a failed result using the {@link onFailure} callback into a successful result.
+	 * In addition, it catches any exceptions that might be thrown inside the {@link onFailure} callback and encapsulates them
+	 * in a failed result.
+	 *
+	 * @param onFailure callback function to transform the error of the result. The callback can be async as well.
+	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
+	 * when the result represents a failure, or the original instance if it represents a success.
+	 */
 	recoverCatching<ReturnType>(onFailure: (error: Err) => ReturnType) {
 		return (
 			this.success
@@ -424,6 +1012,9 @@ export class Result<Value, Err> {
 				: Result<Value | ReturnType, NativeError>;
 	}
 
+	/**
+	 * Returns a string representation of the result.
+	 */
 	toString(): string {
 		if (this.success) {
 			return `Result.ok(${this._value})`;
@@ -432,20 +1023,54 @@ export class Result<Value, Err> {
 		return `Result.error(${this.error})`;
 	}
 
+	/**
+	 * Creates a new result instance that represents a successful outcome.
+	 *
+	 * @param value The value to encapsulate in the result.
+	 * @returns a new {@linkcode Result} instance.
+	 *
+	 * @example
+	 * ```ts
+	 * const result = Result.ok(42); // Result<number, never>
+	 * ```
+	 */
 	static ok(): Result<void, never>;
 	static ok<Value>(value: Value): Result<Value, never>;
 	static ok(value?: unknown) {
 		return new Result(value, undefined);
 	}
 
+	/**
+	 * Creates a new result instance that represents a failed outcome.
+	 *
+	 * @param error The error to encapsulate in the result.
+	 * @returns a new {@linkcode Result} instance.
+	 *
+	 * @example
+	 * ```ts
+	 * const result = Result.error(new NotFoundError()); // Result<never, NotFoundError>
+	 * ```
+	 */
 	static error<Error>(error: Error): Result<never, Error> {
 		return new Result(undefined as never, error);
 	}
 
+	/**
+	 * Type guard that checks whether the provided value is a {@linkcode Result} instance.
+	 *
+	 * @param possibleResult any value that might be a {@linkcode Result} instance.
+	 * @returns true if the provided value is a {@linkcode Result} instance, otherwise false.
+	 */
 	static isResult(possibleResult: unknown): possibleResult is AnyResult {
 		return possibleResult instanceof Result;
 	}
 
+	/**
+	 * Type guard that checks whether the provided value is a {@linkcode AsyncResult} instance.
+	 *
+	 * @param possibleAsyncResult any value that might be a {@linkcode AsyncResult} instance.
+	 * @returns true if the provided value is a {@linkcode AsyncResult} instance, otherwise false.
+	 */
 	static isAsyncResult(
 		possibleAsyncResult: unknown,
 	): possibleAsyncResult is AnyAsyncResult {
@@ -466,10 +1091,6 @@ export class Result<Value, Err> {
 		items: any[],
 		opts: { catching: boolean },
 	): AnyResult | AnyAsyncResult {
-		if (items.length === 0 || (items.length === 1 && items[0] === undefined)) {
-			throw new Error("expected at least 1 argument");
-		}
-
 		const runner = opts.catching ? Result.try : Result.run;
 
 		const flattened: Array<AnyResult | AnyAsyncResult> = [];
@@ -565,38 +1186,94 @@ export class Result<Value, Err> {
 		);
 	}
 
-	static all<
-		Item,
-		Rest extends any[],
-		AllItems extends any[] = [Item, ...Rest],
-		Unwrapped extends any[] = UnwrapList<AllItems>,
-	>(item: Item, ...rest: Rest) {
-		return Result.allInternal([item, ...rest], {
+	/**
+	 * Similar to {@linkcode Promise.all}, but for results.
+	 * Useful when you want to run multiple independent operations and bundle the outcome into a single result.
+	 * All possible values of the individual operations are collected into an array. `Result.all` will fail eagerly,
+	 * meaning that as soon as any of the operations fail, the entire result will be a failure.
+	 * Each argument can be a mixture of literal values, functions, {@linkcode Result} or {@linkcode AsyncResult} instances, or {@linkcode Promise}.
+	 *
+	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}.
+	 * @returns combined result of all the operations.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.allCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * basic usage
+	 * ```ts
+	 * declare function createTask(name: string): Result<Task, IOError>;
+	 *
+	 * const tasks = ["task-a", "task-b", "task-c"];
+	 * const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
+	 * ```
+	 *
+	 * @example
+	 * running multiple operations and combining the results
+	 * ```ts
+	 * const result = Result.all(
+	 *   "a",
+	 *   Promise.resolve("b"),
+	 *   Result.ok("c"),
+	 *   Result.try(async () => "d"),
+	 *   () => "e",
+	 *   () => Result.try(async () => "f"),
+	 *   () => Result.ok("g"),
+	 *   async () => "h",
+	 * ); // AsyncResult<[string, string, string, string, string, string, string, string], Error>
+	 * ```
+	 */
+	static all<Items extends any[], Unwrapped extends any[] = UnwrapList<Items>>(
+		...items: Items
+	) {
+		return Result.allInternal(items, {
 			catching: false,
-		}) as ListContainsPromiseOrAsyncFunction<AllItems> extends true
+		}) as ListContainsPromiseOrAsyncFunction<Items> extends true
 			? AsyncResult<InferValues<Unwrapped>, Union<InferErrors<Unwrapped>>>
 			: Result<InferValues<Unwrapped>, Union<InferErrors<Unwrapped>>>;
 	}
 
+	/**
+	 * Similar to {@linkcode Result.all}, but catches any exceptions that might be thrown during the operations.
+	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}.
+	 * @returns combined result of all the operations.
+	 */
 	static allCatching<
-		Item,
-		Rest extends any[],
-		AllItems extends any[] = [Item, ...Rest],
-		Unwrapped extends any[] = UnwrapList<AllItems>,
-	>(item: Item, ...rest: Rest) {
-		return Result.allInternal([item, ...rest], {
+		Items extends any[],
+		Unwrapped extends any[] = UnwrapList<Items>,
+	>(...items: Items) {
+		return Result.allInternal(items, {
 			catching: true,
-		}) as ListContainsPromiseOrAsyncFunction<AllItems> extends true
+		}) as ListContainsPromiseOrAsyncFunction<Items> extends true
 			? AsyncResult<
 					InferValues<Unwrapped>,
-					Union<InferErrors<Unwrapped>> | AccountForFunctionThrowing<AllItems>
+					Union<InferErrors<Unwrapped>> | AccountForFunctionThrowing<Items>
 				>
 			: Result<
 					InferValues<Unwrapped>,
-					Union<InferErrors<Unwrapped>> | AccountForFunctionThrowing<AllItems>
+					Union<InferErrors<Unwrapped>> | AccountForFunctionThrowing<Items>
 				>;
 	}
 
+	/**
+	 * Wraps a function and returns a new function that returns a result. Especially useful when you want to work with
+	 * external functions that might throw exceptions.
+	 * The returned function will catch any exceptions that might be thrown and encapsulate them in a failed result.
+	 *
+	 * @param fn function to wrap. Can be synchronous or asynchronous.
+	 * @returns a new function that returns a result.
+	 *
+	 * @example
+	 * basic usage
+	 * ```ts
+	 * declare function divide(a: number, b: number): number;
+	 *
+	 * const safeDivide = Result.wrap(divide);
+	 * const result = safeDivide(10, 0); // Result<number, Error>
+	 * ```
+	 */
 	static wrap<Fn extends AnyAsyncFunction>(
 		fn: Fn,
 	): (
@@ -611,6 +1288,33 @@ export class Result<Value, Err> {
 		};
 	}
 
+	/**
+	 * Executes the given {@linkcode fn} function and encapsulates the returned value as a successful result, or the
+	 * thrown exception as a failed result. In a way, you can view this method as a try-catch block that returns a result.
+	 *
+	 * @param fn function with code to execute. Can be synchronous or asynchronous.
+	 * @param transform optional callback to transform the caught error into a more meaningful error.
+	 * @returns a new {@linkcode Result} instance.
+	 *
+	 * @example
+	 * basic usage
+	 * ```ts
+	 * declare function saveFileToDisk(filename: string): void; // might throw an error
+	 *
+	 * const result = Result.try(() => saveFileToDisk("file.txt")); // Result<void, Error>
+	 * ```
+	 *
+	 * @example
+	 * basic usage with error transformation
+	 * ```ts
+	 * declare function saveFileToDisk(filename: string): void; // might throw an error
+	 *
+	 * const result = Result.try(
+	 *   () => saveFileToDisk("file.txt"),
+	 *   (error) => new IOError("Failed to save file", { cause: error })
+	 * ); // Result<void, IOError>
+	 * ```
+	 */
 	static try<
 		Fn extends AnyAsyncFunction<AnyResult>,
 		R = InferPromise<ReturnType<Fn>>,
@@ -649,6 +1353,31 @@ export class Result<Value, Err> {
 		}
 	}
 
+	/**
+	 * Utility method to transform a Promise, that holds a literal value or
+	 * a {@linkcode Result} or {@linkcode AsyncResult} instance, into an {@linkcode AsyncResult} instance. Useful when you want to immediately chain operations
+	 * after calling an async function.
+	 *
+	 * @returns a new {@linkcode Result} instance.
+	 *
+	 * [!NOTE]
+	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * basic usage
+	 *
+	 * ```ts
+	 * declare function someAsyncOperation(): Promise<Result<number, Error>>;
+	 *
+	 * // without 'Result.fromAsync'
+	 * const result = (await someAsyncOperation()).map((value) => value * 2); // Result<number, Error>
+	 *
+	 * // with 'Result.fromAsync'
+	 * const asyncResult = Result.fromAsync(someAsyncOperation()).map((value) => value * 2); // AsyncResult<number, Error>
+	 * ```
+	 */
 	static fromAsync<T extends Promise<AnyAsyncResult>>(
 		value: T,
 	): T extends Promise<AsyncResult<infer V, infer E>>
@@ -664,6 +1393,10 @@ export class Result<Value, Err> {
 		return Result.run(() => value);
 	}
 
+	/**
+	 * Similar to {@linkcode Result.fromAsync} this method transforms a Promise into an {@linkcode AsyncResult} instance.
+	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
+	 */
 	static fromAsyncCatching<T extends Promise<AnyAsyncResult>>(
 		value: T,
 	): T extends Promise<AsyncResult<infer V, infer E>>
@@ -681,6 +1414,12 @@ export class Result<Value, Err> {
 		return Result.try(() => value);
 	}
 
+	/**
+	 * Asserts that the provided result is successful. If the result is a failure, an error is thrown.
+	 * Useful in unit tests.
+	 *
+	 * @param result the result instance to assert against.
+	 */
 	static assertOk<Value>(
 		result: Result<Value, any>,
 	): asserts result is Result<Value, never> {
@@ -689,6 +1428,12 @@ export class Result<Value, Err> {
 		}
 	}
 
+	/**
+	 * Asserts that the provided result is a failure. If the result is successful, an error is thrown.
+	 * Useful in unit tests.
+	 *
+	 * @param result the result instance to assert against.
+	 */
 	static assertError<Err>(
 		result: Result<any, Err>,
 	): asserts result is Result<never, Err> {

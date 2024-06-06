@@ -10,7 +10,12 @@ import type {
 	UnionContainsPromise,
 	UnwrapList,
 } from "./helpers.js";
-import { isAsyncFn, isFunction, isPromise } from "./helpers.js";
+import {
+	assertUnreachable,
+	isAsyncFn,
+	isFunction,
+	isPromise,
+} from "./helpers.js";
 
 describe("helpers", () => {
 	describe("isPromise", () => {
@@ -37,6 +42,24 @@ describe("helpers", () => {
 			expect(isAsyncFn(() => {})).toBe(false);
 			expect(isAsyncFn(() => Promise.resolve(12))).toBe(false);
 			expect(isAsyncFn(async () => {})).toBe(true);
+		});
+	});
+
+	describe("assertUnreachable", () => {
+		it("throws an error when called", () => {
+			// @ts-expect-error
+			expect(() => assertUnreachable("")).toThrowError("Unreachable case: ");
+		});
+
+		it("complains (TS) when not all cases are handles", () => {
+			const value = "a" as "a" | "b";
+			switch (value) {
+				case "a":
+					break;
+				default:
+					// @ts-expect-error Argument of type is not assignable to parameter of type 'never'
+					assertUnreachable(value);
+			}
 		});
 	});
 

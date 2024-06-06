@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assertUnreachable } from "./helpers.js";
 import { Result } from "./result.js";
 
 describe("User management app", () => {
@@ -131,6 +132,8 @@ describe("User management app", () => {
 								status: 400,
 								data: { message: "account with same email already exists" },
 							};
+						default:
+							return assertUnreachable(error);
 					}
 				},
 			);
@@ -145,6 +148,8 @@ describe("User management app", () => {
 							return { status: 404, data: { message: error.message } };
 						case "validation-error":
 							return { status: 400, data: { message: error.message } };
+						default:
+							return assertUnreachable(error);
 					}
 				},
 			);

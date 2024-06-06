@@ -4,15 +4,23 @@
 	"version": "2.0.0-beta.1",
 	"description": "A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable.",
 	"keywords": [
-		"Result",
-		"Typescript",
-		"error handling"
+		"result",
+		"type",
+		"TypeScript",
+		"ts",
+		"error",
+		"error handling",
+		"exception",
+		"ok",
+		"success",
+		"failure"
 	],
 	"author": {
 		"name": "Erik Verweij",
 		"url": "https://github.com/everweij"
 	},
-	"repository": "https://github.com/everweij/typescript-result",
+	"repository": "github:everweij/typescript-result",
+  "homepage": "https://github.com/everweij/typescript-result#readme",
 	"bugs": {
 		"url": "https://github.com/everweij/typescript-result/issues/new"
 	},
@@ -24,6 +32,9 @@
 	"type": "module",
 	"module": "dist/index.js",
 	"types": "dist/index.d.ts",
+	"engines": {
+		"node": ">=18"
+	},
 	"exports": {
 		".": {
 			"import": {

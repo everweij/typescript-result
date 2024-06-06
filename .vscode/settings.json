@@ -12,5 +12,6 @@
     "editor.defaultFormatter": "biomejs.biome"
   },
   "typescript.reportStyleChecksAsWarnings": false,
-  "prettier.enable": false
+  "prettier.enable": false,
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

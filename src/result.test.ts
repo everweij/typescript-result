@@ -299,11 +299,6 @@ describe("Result", () => {
 			expect(result.value).toEqual(["a", "b", "c"]);
 		});
 
-		it("throws when no arguments are provided", () => {
-			// @ts-expect-error - no arguments provided
-			expect(() => Result.allCatching()).toThrow();
-		});
-
 		it("takes multiple successful results and combines it into one successful result", () => {
 			const result = Result.allCatching(
 				Result.ok("a"),

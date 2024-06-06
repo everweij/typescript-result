@@ -19,6 +19,30 @@ export function isAsyncFn(fn: AnyFunction): fn is AnyAsyncFunction {
 	return fn.constructor.name === "AsyncFunction";
 }
 
+/**
+ * Utlity function to assert that a case is unreachable
+ * @param value the value which to check for exhaustiveness
+ *
+ * @example
+ * ```ts
+ * declare const value: "a" | "b" | "c";
+ *
+ * switch (value) {
+ *   case "a":
+ * 		// do something
+ * 		  break;
+ *    case "b":
+ * 		// do something
+ * 		  break;
+ *    default: assertUnreachable(value) // TS should complain here
+ * }
+ *
+ * ```
+ */
+export function assertUnreachable(value: never): never {
+	throw new Error(`Unreachable case: ${value}`);
+}
+
 export type IsAsyncFunction<T> = T extends AnyAsyncFunction ? true : false;
 
 type IsPromiseOrAsyncFunction<T> = T extends AnyAsyncFunction

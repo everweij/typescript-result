@@ -134,7 +134,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 *
 	 * @throws an error if the result is a failure.
 	 *
-	 * [!IMPORTANT]
+	 * > [!IMPORTANT]
 	 * > The error thrown will have the original error set as the `cause` property.
 	 *
 	 * @example
@@ -154,7 +154,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * Returns the result of the {@link onSuccess} callback when the result represents success or
 	 * the result of the {@link onFailure} callback when the result represents a failure.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the callbacks are not caught, so it is your responsibility
 	 * > to handle these exceptions
 	 *
@@ -198,7 +198,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * @param action callback function to run when the result is a failure. The callback can be async as well.
 	 * @returns the original instance of the result.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions
 	 *
@@ -232,7 +232,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * @param action callback function to run when the result is successful. The callback can be async as well.
 	 * @returns the original instance of the result.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions
 	 *
@@ -276,7 +276,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * @param transform callback function to transform the value of the result. The callback can be async as well.
 	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions. Please refer to {@linkcode AsyncResult.mapCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
@@ -385,7 +385,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
 	 * if it represents a success.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link onFailure} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions. Please refer to {@linkcode AsyncResult.recoverCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
@@ -506,7 +506,7 @@ export class Result<Value, Err> {
 	) {}
 
 	/**
-	 * Utility getter the current instance is a `Result`.
+	 * Utility getter that checks if the current instance is a `Result`.
 	 */
 	get isResult(): true {
 		return true;
@@ -546,7 +546,7 @@ export class Result<Value, Err> {
 	 *
 	 * @returns The error if the operation failed, otherwise `undefined`.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > You can use {@linkcode Result.isError} to narrow down the type to a failed result.
 	 *
 	 * @example
@@ -697,7 +697,7 @@ export class Result<Value, Err> {
 	 *
 	 * @throws an error if the result is a failure.
 	 *
-	 * [!IMPORTANT]
+	 * > [!IMPORTANT]
 	 * > The error thrown will have the original error set as the `cause` property.
 	 *
 	 * @example
@@ -722,7 +722,7 @@ export class Result<Value, Err> {
 	 * Returns the result of the {@link onSuccess} callback when the result represents success or
 	 * the result of the {@link onFailure} callback when the result represents a failure.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the callbacks are not caught, so it is your responsibility
 	 * > to handle these exceptions
 	 *
@@ -773,7 +773,7 @@ export class Result<Value, Err> {
 	 * @param action callback function to run when the result is a failure. The callback can be async as well.
 	 * @returns the original instance of the result.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions
 	 *
@@ -815,7 +815,7 @@ export class Result<Value, Err> {
 	 * @param action callback function to run when the result is successful. The callback can be async as well.
 	 * @returns the original instance of the result. If the callback is async, it returns a new {@link AsyncResult} instance.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link action} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions
 	 *
@@ -866,7 +866,7 @@ export class Result<Value, Err> {
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
 	 * if the transform function is async.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions. Please refer to {@linkcode Result.mapCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
@@ -955,7 +955,7 @@ export class Result<Value, Err> {
 	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
 	 * when the result represents a failure, or the original instance if it represents a success.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link onFailure} callback are not caught, so it is your responsibility
 	 * > to handle these exceptions. Please refer to {@linkcode Result.recoverCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
@@ -1196,7 +1196,7 @@ export class Result<Value, Err> {
 	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}.
 	 * @returns combined result of all the operations.
 	 *
-	 * [!NOTE]
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
 	 * > to handle these exceptions. Please refer to {@linkcode Result.allCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
@@ -1358,9 +1358,11 @@ export class Result<Value, Err> {
 	 * a {@linkcode Result} or {@linkcode AsyncResult} instance, into an {@linkcode AsyncResult} instance. Useful when you want to immediately chain operations
 	 * after calling an async function.
 	 *
-	 * @returns a new {@linkcode Result} instance.
+	 * @param value a Promise that holds a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance.
 	 *
-	 * [!NOTE]
+	 * @returns a new {@linkcode AsyncResult} instance.
+	 *
+	 * > [!NOTE]
 	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
 	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.

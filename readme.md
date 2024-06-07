@@ -9,9 +9,9 @@
 
 A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable with full type safety.
 
-# Getting started
+## Getting started
 
-# Installation
+### Installation
 
 Install using your favorite package manager:
 
@@ -19,9 +19,9 @@ Install using your favorite package manager:
 npm install typescript-result
 ```
 
-## Requirements
+### Requirements
 
-### Typescript
+#### Typescript
 
 Technically Typescript with version `4.8.0` or higher should work, but we recommend using version >= `5` when possible.
 
@@ -35,11 +35,11 @@ Also it is important that you have `strict` or `strictNullChecks` enabled in you
 }
 ```
 
-### Node
+#### Node
 
 Tested with Node.js version `16` and higher.
 
-## Example
+### Example
 
 ```typescript
 import { Result } from "typescript-result";
@@ -68,21 +68,21 @@ if (result.isOk()) {
 }
 ```
 
-# Why should you use a result type?
+## Why should you use a result type?
 
-## Errors as values
+### Errors as values
 
 The Result type is a product of the ‘error-as-value’ movement which in turn has its roots in function programming. When throwing exceptions, all errors are treated equally, and behave different compared to the normal flow of the program. Instead, we like to make a distinction between expected errors and unexpected errors, and make the expected errors part of the normal flow of the program. By explicitely defining that a piece of code can either fail or succeed using the Result type, we can leverage TypeScript's powerful type system to keep track for us everything that can go wrong in our code, and let it correct us when we overlooked certain scenarios by performing exhaustive checks. This makes our code more type-safe, easier to maintain, and more transparent.
 
-## Ergonomic error handling
+### Ergonomic error handling
 
 The goal is to keep the effort in using this library as light as possible, with a relatively small API surface. We don't want to introduce a whole new programming model where you would have to learn a ton of new concepts. Instead, we want to build on top of the existing features and best practices of the language, and provide a simple and intuitive API that is easy to understand and use. It also should be easy to incrementally adopt with existing codebases.
 
-# Why should you use this library?
+## Why should you use this library?
 
 There are already a few quality libraries out there that provide a Result type or similar for TypeScript. We believe that there are two reasons why you should consider using this library.
 
-## Async support
+### Async support
 
 Result instances that are wrapped in a Promise can be painful to work with, because you would have to `await` every async operation before you can _chain_ next operations (like 'map', 'fold', etc.). To solve this and to make your code more ergonomic we provide an `AsyncResult` that is essentially a regular Promise that contains a `Result` type, along with a couple of methods, to make it easier to chain operations without having to assign the intermediate results to a variable or having to use `await` for each async operation.
 
@@ -123,7 +123,7 @@ const result = await Result.fromAsync(someAsyncFunction1())
   );
 ```
 
-## _Full_ type safety without a lot of boilerplate
+### _Full_ type safety without a lot of boilerplate
 
 This library is able to track all possible outcomes simply by using type inference. Of course, there are edge cases, but most of the time all you have to do is to simply return `Result.ok()` or `Result.error()`, and the library will do the rest for you.
 In the example below, Typescript will complain that not all code paths return a value. Rightfully so, because we forgot to implement the case where there is not enough stock:

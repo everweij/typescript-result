@@ -9,6 +9,21 @@
 
 A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable with full type safety.
 
+## Table of contents
+
+- [Getting started](#getting-started)
+- [Why should you use a result type?](#why-should-you-use-a-result-type)
+- [Why should you use this library?](#why-should-you-use-this-library)
+- [Guide](#guide)
+  - [A note on errors](#a-note-on-errors)
+  - [Creating a result](#creating-a-result)
+  - [Performing operations on a result](#performing-operations-on-a-result)
+  - [Unwrapping a result](#unwrapping-a-result)
+  - [Handling errors](#handling-errors)
+  - [Async operations](#async-operations)
+  - [Merging or combining results](#merging-or-combining-results)
+- [API Reference](#api-reference)
+
 ## Getting started
 
 ### Installation
@@ -146,13 +161,13 @@ function order(basket: Basket, stock: Stock, account: Account) {
     return Result.error(new NotEnoughStockError());
   }
 
-  const order: Order = { /skipped for brevity */ }
+  const order: Order = { /* skipped for brevity */ }
 
   return Result.ok(order);
 }
 
 function handleOrder(products: Product[], userId: number) {
-  /skipped for brevity  */
+  /* skipped for brevity  */
 
   return order(basket, stock, account).fold(
     () => ({
@@ -170,6 +185,376 @@ function handleOrder(products: Product[], userId: number) {
     }
   );
 }
+```
+
+## Guide
+
+### A note on errors
+
+Errors are a fundamental part of the Result type. This library does not have a strong opinion on what your errors should look like; they can be any value, like a string, number, object, etc. Usually though, people tend to use instances of the `Error` class or any custom errors by subclassing the `Error` class.
+
+There's only one thing to keep in mind when it comes to using custom errors that extends the `Error` class: in certain circumstances, like infering errors of a result type, TypeScript tends to unify types that look similar. This means that in the example below, TypeScript will infer the error type of the result to be `Error` instead of `ErrorA | ErrorB`. This is because TypeScript does not have a way to distinguish between the two errors, since they are both instances of the `Error` class.
+
+```typescript
+class ErrorA extends Error {}
+class ErrorB extends Error {}
+
+function example() {
+  if (condition) {
+    return Result.error(new ErrorA());
+  }
+
+  return Result.error(new ErrorB());
+}
+
+const result = example();
+if (result.isError()) {
+  // TypeScript infers that result.error is of type Error, and not ErrorA | ErrorB
+  console.error(result.error);
+}
+```
+
+To mitiage this, you can add a property on your custom errors, a so-called discriminant field, that makes it easier for TypeScript to distinguish between the different error types. In the example below, TypeScript will infer the error type of the result to be `ErrorA | ErrorB`:
+
+```typescript
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+function example() {
+  if (condition) {
+    return Result.error(new ErrorA());
+  }
+
+  return Result.error(new ErrorB());
+}
+
+const result = example();
+if (result.isError()) {
+  console.error(result.error); // ErrorA | ErrorB
+}
+```
+
+Although we agree that this might be a but cumbersome, it is a small price to pay for the benefits that you get in return. For consistency, we recommend to always add a `readonly type` property to your custom errors.
+
+### Creating a result
+
+#### Basic usage
+
+The most common way to create a result is by using the [`Result.ok`](#resultokvalue) and [`Result.error](#resulterrorerror)` static methods.
+
+The example below produces a result which contains either the outcome of the division or a `DivisionByZeroError` error.
+
+```ts
+function divide(a: number, b: number) {
+  if (b === 0) {
+    return Result.error(new DivisionByZeroError(`Cannot divide ${a} by zero`));
+  }
+
+  return Result.ok(a / b);
+}
+```
+
+Note that we didn't specify any explicit return type for the `divide` function. In most cases TypeScript is smart enough to infer the result types most of the times for you. In case of the example above, the return type gets infered to `Result<number, DivisionByZeroError>`. There are good reasons to specify the return type explicitly (e.g. clarity, readability, etc.), but in general it is up to you whether you want type your returns explicitly or not.
+
+Also note that when using `Result.ok` it is optional to provide a value (`Result.ok()`), simply because not all operations produce a value. 
+
+#### Using `Result.try` and `Result.wrap`
+
+[`Result.try`](#resulttryfn-transform) is a convenient way to wrap code that might throw an error. The method will catch any exceptions that might be thrown and encapsulate them in a failed result. This is especially useful when you want to work with existing or external functions that might throw exceptions. You can view `Result.try` as a replacement for the traditional try-catch block.
+
+```ts
+// Using try-catch
+let result: Result<void, Error>;
+try {
+  fs.writeFileSync("file.txt", "Hello, World!", "utf-8");
+  result = Result.ok();
+} catch (error) {
+  result = Result.error(error);
+}
+
+// Using Result.try
+const result = Result.try(() => fs.writeFileSync("file.txt", "Hello, World!", "utf-8"));
+```
+
+Here, we are using Node's `fs` module to write a file to disk. The `writeFileSync` method might throw an error if something goes wrong. You might not have the correct permissions for instance, or you ran out of disk space. By using `Result.try`, we can catch the error and encapsulate it in a failed result.
+
+Optionally, you can provide a second argument to `Result.try` which is a callback that allows you to transform the caught error into a more meaningful error. This is useful when you want to provide more context or when you want to wrap the error in a custom error type.
+
+```ts
+const result = Result.try(
+	() => fs.writeFileSync("file.txt", "Hello, World!", "utf-8"),
+	(error) => new IOError("Failed to save file", { cause: error }),
+);
+```
+
+Additionally, you can use [`Result.wrap`](#resultwrapfn) to wrap a function and return a new function that returns a result. The main difference compared to `Result.try` is that `Result.wrap` returns a function, while `Result.try` executes the function immediately. 
+
+```ts
+const safeWriteFile = Result.wrap(fs.writeFileSync);
+
+const result = safeWriteFile("file.txt", "Hello, World!", "utf-8"); // Result<void, Error>
+```
+
+### Performing operations on a result
+
+Having a result is one thing, but in many cases, you also want to do something with it. The library provides a set of methods to work with results.
+
+#### Chaining operations
+
+Similar to arrays and promises, you can also chain operations on a result. The main benefit of chaining operations is that you can keep your code compact, concise and readable, without having to assign intermediate results to variables. Let's look at an example:
+
+```ts
+// Without chaining
+const resultA = someOperation();
+if (resultA.isOk()) {
+  const resultB = anotherOperation(resultA.value);
+  if (resultB.isOk()) {
+    const resultC = yetAnotherOperation(resultB.value);
+    if (resultC.isOk()) {
+      // do something
+    } else {
+      // handle error
+    }
+  } else {
+    // handle error
+  }
+} else {
+  // handle error
+}
+
+// With chaining
+const result = someOperation()
+  .map((value) => anotherOperation(value))
+  .map((value) => yetAnotherOperation(value))
+
+if (result.isOk()) {
+  // do something
+} else {
+  // handle error
+}
+```
+
+The chained version is more concise and makes it easier to follow the flow of the program. Moreover, it allows us to _centralize_ error handling at the end of the flow. This is possible because all transformative operations produce new results which carry over any errors that might have occurred earlier in the chain.
+
+#### Transform: `map`, `mapCatching`, `recover`, `recoverCatching`
+
+Both [`map`](#maptransformfn) and [`recover`](#recoveronfailure) behave very similar in the sense that they transform a result using function provided by the user into a new result. The main difference is that `map` is used to transform a successful result, while `recover` is used to transform a failed result.
+
+The difference between the 'catching' variants is that they catch any exceptions that might be thrown inside the transformation function and encapsulate them in a failed result. So why would you not always use the 'catching' variants? It might be useful to make a distinction between exceptions that are expected and unexpected. If you _expect_ an exception to be thrown, like in the case of writing a file to disk, you might want to handle this use case. If you _don't expect_ an exception to be thrown, like in the case of saving something to a database, you might want to let the exception bubble up or even terminate the application.
+
+Both `map` and `recover` are very flexible when it comes to the returning value of the transformation function. You can return a literal value, a new result, or even a promise that resolves to a value or a result. Other similar result-like libraries might have specific methods for each of thee use cases (e.g. `flatMap`, `chain`, etc.) and can be considered more strict. However, we like the approach of a smaller API surface with more flexibity.
+
+All transformations below produce the same type of result (`Result<number, Error>`, with the exception of the async transformations which produce an `AsyncResult<number, Error>`):
+```ts
+someOperation() // Result<number, Error>
+  .map((value) => value * 2) // Result<number, Error> 
+  .map((value) => Result.ok(value * 2)) // Result<number, Error>
+  .map((value) => Promise.resolve(value * 2)) // AsyncResult<number, Error>;
+  .map(async (value) => value * 2) // AsyncResult<number, Error>;
+  .map(async (value) => Result.ok(value * 2)) // AsyncResult<number, Error>;
+```
+
+`recover` is especially useful when you want to fall back to another scenario when a previous operation fails. In the example below, we try to persist an item in the database. If that fails, we fall back to persisting the item locally.
+
+```ts
+function persistInDB(item: Item): Result<Item, DbError> {
+  // implementation
+};
+function persistLocally(item: Item): Result<Item, IOError> {
+  // implementation
+};
+
+persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
+```
+
+Note that after a recovery, any previous errors that might have occurred are _forgotten_. This is because when using `recover` you are essentially starting with a clean slate. In the example above we can assume that the `DbError` has been taken care of and therefore it has been removed from the final result. `IOError` on te other hand is still a possibility.
+
+#### Side-effects: `onSuccess`, `onFailure`
+
+Sometimes you want to perform side-effects without modifying the result itself. This is where `onSuccess` and `onFailure` come in handy. Both methods allow you to run a callback function when the result is successful or when the result represents a failure. The main difference is that `onSuccess` is used for successful results, while `onFailure` is used for failed results.
+
+In the example below, we log a message when an operation is successful and when it fails:
+
+```ts
+someOperation()
+  .onSuccess((value) => console.log("Operation succeeded with value", value))
+  .onFailure((error) => console.error("Operation failed with error", error));
+```
+
+### Unwrapping a result
+
+At some point in the flow of your program, you want to retrieve the value of a successful result or the error of a failed result. There are a couple of ways to do this, depending on your use case.
+
+#### Narrowing down the type using `isOk()` and `isError()`
+
+The imperative approach is to use the `isOk()` and `isError()` methods to narrow down the type of the result:
+
+```ts
+if (result.isOk()) {
+  // TS infers that result.value is defined
+  console.log(result.value);
+} else if (result.isError()) {
+  // TS infers that result.error is defined
+  console.error(result.error);
+}
+```
+
+If you do not use the type guards, TypeScript will infer the value or error as `T | undefined`. However, there is one exception to this rule: if a result has a error-type of `never`, it is safe to assume that the result can only be successful. Similarly, if the value-type is `never`, it is safe to assume that the result can only be a failure.
+
+```ts
+const resultA = Result.ok(42); // Result<number, never>
+resultA.value; // can only be a `number`, since the error-type is `never`
+
+const resultB = Result.error(new Error("Something went wrong")); // Result<never, Error>
+resultB.value; // can only by `undefined`, since the value-type is `never`
+resultB.error; // can only be an `Error`, since the value-type is `never`
+```
+
+#### Folding a result using `fold`
+
+The `fold` method is a more functional approach to unwrapping a result. It allows you to provide two callbacks: one for the successful case and one for the failure case. The `fold` method will execute the appropriate callback based on the outcome of the result. Using `fold` is especially useful when you want to return the a single 'thing' based on the outcome of the result, for example when you want to return a response object:
+
+```ts
+function handleRoute(id: number) {
+  return performOperation(id).fold(
+    (value) => ({
+      status: 200,
+      body: value,
+    }),
+    (error) => {
+      switch (error.type) {
+        case "not-found":
+          return {
+            status: 404,
+            body: "Not found",
+          };
+        case "unauthorized":
+          return {
+            status: 401,
+            body: "Unauthorized",
+          };
+        default:
+          return {
+            status: 500,
+            body: "Internal server error",
+          };
+      }
+    }
+  );
+}
+```
+
+#### using 'getter' functions
+
+Please consult the [API Reference](#api-reference) for a full list of available methods:
+- [`errorOrNull`](#errorornull-1)
+- [`getOrNull`](#getornull-1)
+- [`getOrDefault`](#getordefaultdefaultvalue-1)
+- [`getOrElse`](#getorelseonfailure-1)
+
+### Handling errors
+
+See the note on [errors](#a-note-on-errors) for more context.
+
+When using custom errors together with a `type` field to distinguish between different error types, you can use conditional checks like 'if-else' or `switch` statements to handle different error types.
+
+In order to perform exhaustive checks you can on the [`noImplicitReturns`](https://www.typescriptlang.org/tsconfig/#noImplicitReturns) compiler option when you are inside the context of a function and you are conditionally returning a value based on the `type` of the error:
+
+```ts
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+declare const result: Result<number, ErrorA | ErrorB>;
+
+result.fold(
+  (value) => /* do something */,
+  (error) => { // TS-Error: Not all code paths return a value
+    switch (error.type) {
+      case "error-a":
+        return /* handle error-a */;
+    }
+  }
+)
+```
+
+Alternatively, you can manually perform exhaustive checks by checking for `never` using a `default` case in a `switch` statement, or the `else` branch in an `if-else` statement:
+
+```ts
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+declare const result: Result<number, ErrorA | ErrorB>;
+
+if (result.isError()) {
+  const error = result.error;
+  if (error.type === "error-a") {
+    // handle error-a
+  } else if (error.type === "error-b") {
+    // handle error-b
+  } else {
+    error satisfies never;
+  }
+}
+```
+
+Because this pattern is so common, this library exposes a little utility function called `assertUnreachable`:
+
+```ts
+import { assertUnreachable } from "typescript-result";
+
+if (result.isError()) {
+  const error = result.error;
+  if (error.type === "error-a") {
+    // handle error-a
+  } else if (error.type === "error-b") {
+    // handle error-b
+  } else {
+    assertUnreachable(error)
+  }
+}
+```
+
+### Async operations
+
+See [Async support](#async-support) for more context.
+
+Because it can be quite cumbersome to work with results that are wrapped in a promise, we provide an `AsyncResult` type that is essentially a regular promise that contains a `Result` type, along with most of the methods that are available on the regular `Result` type. This makes it easier to chain operations without having to assign the intermediate results to a variable or having to use `await` for each async operation.
+
+There are of course plenty of scenarios where an async function returns a `Result` (`Promise<Result<*, *>>`). In these cases, you can use the `fromAsync` and `fromAsyncCatching` methods to convert the promise to an `AsyncResult`, and continue chaining operations:
+
+```ts
+async function someAsyncOperation(): Promise<Result<number, Error>> {
+  return Result.ok(42);
+}
+
+const result = await Result.fromAsync(someAsyncOperation())
+  .map((value) => value * 2)
+  // etc...
+```
+
+### Merging or combining results
+
+In some cases you might want to combine multiple results into a single result. This can be done using the [`Result.all`](#resultallitems) and [`Result.allCatching`](#resultallcatchingitems) methods. The `Result.all` method will return a successful result if all results are successful, otherwise it will return the first error that occurred. This is especially useful when you want to run multiple independent operations and bundle the outcome into a single result:
+
+```ts
+declare function createTask(name: string): Result<Task, IOError>;
+
+const tasks = ["task-a", "task-b", "task-c"];
+const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
 ```
 
 # API Reference

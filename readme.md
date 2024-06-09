@@ -83,6 +83,8 @@ if (result.isOk()) {
 }
 ```
 
+There's also an example repository available [here](https://github.com/everweij/typescript-result-example) that demonstrates how you could potentially use this library in the context of an Express web application.
+
 ## Why should you use a result type?
 
 ### Errors as values

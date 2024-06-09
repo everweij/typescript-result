@@ -87,11 +87,11 @@ if (result.isOk()) {
 
 ### Errors as values
 
-The Result type is a product of the ‘error-as-value’ movement which in turn has its roots in function programming. When throwing exceptions, all errors are treated equally, and behave different compared to the normal flow of the program. Instead, we like to make a distinction between expected errors and unexpected errors, and make the expected errors part of the normal flow of the program. By explicitely defining that a piece of code can either fail or succeed using the Result type, we can leverage TypeScript's powerful type system to keep track for us everything that can go wrong in our code, and let it correct us when we overlooked certain scenarios by performing exhaustive checks. This makes our code more type-safe, easier to maintain, and more transparent.
+The Result type is a product of the ‘error-as-value’ movement, which in turn has its roots in functional programming. When throwing exceptions, all errors are treated equally and behave differently compared to the normal flow of the program. Instead, we like to make a distinction between expected errors and unexpected errors, and make the expected errors part of the normal flow of the program. By explicitly defining that a piece of code can either fail or succeed using the Result type, we can leverage TypeScript's powerful type system to keep track of everything that can go wrong in our code, and let it correct us when we overlook certain scenarios by performing exhaustive checks. This makes our code more type-safe, easier to maintain, and more transparent.
 
 ### Ergonomic error handling
 
-The goal is to keep the effort in using this library as light as possible, with a relatively small API surface. We don't want to introduce a whole new programming model where you would have to learn a ton of new concepts. Instead, we want to build on top of the existing features and best practices of the language, and provide a simple and intuitive API that is easy to understand and use. It also should be easy to incrementally adopt with existing codebases.
+The goal is to keep the effort in using this library as light as possible, with a relatively small API surface. We don't want to introduce a whole new programming model where you would have to learn a ton of new concepts. Instead, we want to build on top of the existing features and best practices of the language, and provide a simple and intuitive API that is easy to understand and use. It also should be easy to incrementally adopt within existing codebase.
 
 ## Why should you use this library?
 
@@ -99,7 +99,7 @@ There are already a few quality libraries out there that provide a Result type o
 
 ### Async support
 
-Result instances that are wrapped in a Promise can be painful to work with, because you would have to `await` every async operation before you can _chain_ next operations (like 'map', 'fold', etc.). To solve this and to make your code more ergonomic we provide an `AsyncResult` that is essentially a regular Promise that contains a `Result` type, along with a couple of methods, to make it easier to chain operations without having to assign the intermediate results to a variable or having to use `await` for each async operation.
+Result instances that are wrapped in a Promise can be painful to work with, because you would have to `await` every async operation before you can _chain_ next operations (like 'map', 'fold', etc.). To solve this and to make your code more ergonomic we provide an `AsyncResult` that is essentially a regular Promise containing a `Result` type, along with a couple of methods to make it easier to chain operations without having to assign the intermediate results to a variable or having to use `await` for each async operation.
 
 So instead of writing:
 
@@ -193,7 +193,7 @@ function handleOrder(products: Product[], userId: number) {
 
 Errors are a fundamental part of the Result type. This library does not have a strong opinion on what your errors should look like; they can be any value, like a string, number, object, etc. Usually though, people tend to use instances of the `Error` class or any custom errors by subclassing the `Error` class.
 
-There's only one thing to keep in mind when it comes to using custom errors that extends the `Error` class: in certain circumstances, like infering errors of a result type, TypeScript tends to unify types that look similar. This means that in the example below, TypeScript will infer the error type of the result to be `Error` instead of `ErrorA | ErrorB`. This is because TypeScript does not have a way to distinguish between the two errors, since they are both instances of the `Error` class.
+There's only one thing to keep in mind when it comes to using custom errors that extends the `Error` class: in certain circumstances, like inferring errors of a result type, TypeScript tends to unify types that look similar. This means that in the example below, TypeScript will infer the error type of the result to be `Error` instead of `ErrorA | ErrorB`. This is because TypeScript does not have a way to distinguish between the two errors, since they are both instances of the `Error` class.
 
 ```typescript
 class ErrorA extends Error {}
@@ -214,7 +214,7 @@ if (result.isError()) {
 }
 ```
 
-To mitiage this, you can add a property on your custom errors, a so-called discriminant field, that makes it easier for TypeScript to distinguish between the different error types. In the example below, TypeScript will infer the error type of the result to be `ErrorA | ErrorB`:
+To mitigate this, you can add a property on your custom errors, a so-called discriminant field, that makes it easier for TypeScript to distinguish between the different error types. In the example below, TypeScript will infer the error type of the result to be `ErrorA | ErrorB`:
 
 ```typescript
 class ErrorA extends Error {
@@ -238,7 +238,7 @@ if (result.isError()) {
 }
 ```
 
-Although we agree that this might be a but cumbersome, it is a small price to pay for the benefits that you get in return. For consistency, we recommend to always add a `readonly type` property to your custom errors.
+Although we agree that this might be a bit cumbersome, it is a small price to pay for the benefits that you get in return. For consistency, we recommend to always add a `readonly type` property to your custom errors.
 
 ### Creating a result
 
@@ -258,7 +258,7 @@ function divide(a: number, b: number) {
 }
 ```
 
-Note that we didn't specify any explicit return type for the `divide` function. In most cases TypeScript is smart enough to infer the result types most of the times for you. In case of the example above, the return type gets infered to `Result<number, DivisionByZeroError>`. There are good reasons to specify the return type explicitly (e.g. clarity, readability, etc.), but in general it is up to you whether you want type your returns explicitly or not.
+Note that we didn't specify any explicit return type for the `divide` function. In most cases TypeScript is smart enough to infer the result types most of the times for you. In case of the example above, the return type gets inferred to `Result<number, DivisionByZeroError>`. There are good reasons to specify the return type explicitly (e.g. clarity, readability, etc.), but in general it is not technically a necessity and therefore up to you to decide to define your returns explicit or not.
 
 Also note that when using `Result.ok` it is optional to provide a value (`Result.ok()`), simply because not all operations produce a value. 
 
@@ -346,7 +346,7 @@ Both [`map`](#maptransformfn) and [`recover`](#recoveronfailure) behave very sim
 
 The difference between the 'catching' variants is that they catch any exceptions that might be thrown inside the transformation function and encapsulate them in a failed result. So why would you not always use the 'catching' variants? It might be useful to make a distinction between exceptions that are expected and unexpected. If you _expect_ an exception to be thrown, like in the case of writing a file to disk, you might want to handle this use case. If you _don't expect_ an exception to be thrown, like in the case of saving something to a database, you might want to let the exception bubble up or even terminate the application.
 
-Both `map` and `recover` are very flexible when it comes to the returning value of the transformation function. You can return a literal value, a new result, or even a promise that resolves to a value or a result. Other similar result-like libraries might have specific methods for each of thee use cases (e.g. `flatMap`, `chain`, etc.) and can be considered more strict. However, we like the approach of a smaller API surface with more flexibity.
+Both `map` and `recover` are very flexible when it comes to the returning value of the transformation function. You can return a literal value, a new result, or even a promise that resolves to a value or a result. Other similar result-like libraries might have specific methods for each of thee use cases (e.g. `flatMap`, `chain`, etc.) and can be considered more strict. However, we like the approach of a smaller API surface with more flexibility.
 
 All transformations below produce the same type of result (`Result<number, Error>`, with the exception of the async transformations which produce an `AsyncResult<number, Error>`):
 ```ts

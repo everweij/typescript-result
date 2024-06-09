@@ -1,0 +1,42 @@
+name: release
+on:
+    release:
+        types: [created]
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repo
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.release.target_commitish }}
+
+            - name: Validate and extract release information
+              id: release
+              uses: manovotny/github-releases-for-automated-package-publishing-action@v2.0.1
+
+            - name: Setup NodeJS
+              uses: actions/setup-node@v4
+              with:
+                node-version: 20
+                cache: 'npm'
+                always-auth: true
+                registry-url: 'https://registry.npmjs.org'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build
+              run: npm run build
+
+            - name: Publish version
+              if: steps.release.outputs.tag == ''
+              run: npm publish
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+            - name: Publish tagged version
+              if: steps.release.outputs.tag != ''
+              run: npm publish --tag ${{ steps.release.outputs.tag }}
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -56,34 +56,77 @@ Tested with Node.js version `16` and higher.
 
 ### Example
 
+Reading a JSON config file and validating its contents:
+
 ```typescript
 import { Result } from "typescript-result";
+import fs from "node:fs/promises";
 
-// Define errors like you would normally do
-class DivisionByZeroError extends Error {
-  readonly type = "division-by-zero";
+class IOError extends Error {
+  readonly type = "io-error";
 }
 
-// Define a function that can either return a value or an error
-function divide(a: number, b: number) {
-  if (b === 0) {
-    return Result.error(new DivisionByZeroError(`Cannot divide ${a} by zero`));
+class ParseError extends Error {
+  readonly type = "parse-error";
+}
+
+class ValidationError extends Error {
+  readonly type = "validation-error";
+}
+
+function readFile(path: string) {
+  return Result.try(
+    () => fs.readFile(path, "utf-8"),
+    (error) => new IOError(`Unable to read file '${path}'`, { cause: error })
+  );
+}
+
+function parseJson(value: string) {
+  return Result.try(
+    () => JSON.parse(value),
+    (error) => new ParseError("Unable to parse JSON", { cause: error })
+  );
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+function getConfig(value: unknown) {
+  if (!isObject(value)) {
+    return Result.error(new ValidationError("Invalid config file"));
+  }
+  if (!value.name || !isString(value.name)) {
+    return Result.error(new ValidationError("Missing or invalid 'name' field"));
+  }
+  if (!value.version || !isString(value.version)) {
+    return Result.error(new ValidationError("Missing or invalid 'version' field"));
   }
 
-  return Result.ok(a / b);
+  return Result.ok({ name: value.name, version: value.version });
 }
 
-const result = divide(10, 2);
-if (result.isOk()) {
-  // TS infers that result.value is a number
-  console.log(result.value); // 5
-} else if (result.isError()) {
-  // TS infers that result.error is a `DivisionByZeroError`
-  console.error(result.error);
-}
+const message = await readFile("./config.json")
+  .map((contents) => parseJson(contents))
+  .map((json) => getConfig(json))
+  .fold(
+    (config) =>
+      `Successfully read config: name => ${config.name}, version => ${config.version}`,
+    (error) => {
+      switch (error.type) {
+        case "io-error": 
+          return "Please check if the config file exists and is readable";
+        case "parse-error":
+          return "Please check if the config file contains valid JSON";
+        case "validation-error":
+          return error.message;
+      }
+    }
+  );
 ```
 
-There's also an example repository available [here](https://github.com/everweij/typescript-result-example) that demonstrates how you could potentially use this library in the context of an Express web application.
+There's also an example repository available [here](https://github.com/everweij/typescript-result-example) that demonstrates how you could potentially use this library in the context of a web API.
 
 ## Why should you use a result type?
 
@@ -138,6 +181,25 @@ const result = await Result.fromAsync(someAsyncFunction1())
       // handle error
     }
   );
+```
+
+You rarely have to deal with `AsyncResult` directly though, because this library will automatically convert the result of an async operation to an `AsyncResult` when needed, and since the API's are almost identical in shape, there's a big chance you wouldn't even notice you're using a `AsyncResult` under the hood. Let's look at an example what this means in practice:
+
+```typescript
+// start with a sync value -> Result<number, never>
+const result = await Result.ok(12)
+  // map the value to a Promise -> AsyncResult<number, never>
+  .map((value) => Promise.resolve(value * 2)) // 
+  // map async to another result -> AsyncResult<string, ValidationError>
+  .map(async (value) => {
+    if (value < 10) {
+      return Result.error(new ValidationError("Value is too low"));
+    }
+
+    return Result.ok("All good!");
+  })
+  // unwrap the result -> Promise<string>;
+  .getOrElse((error) => error.message);
 ```
 
 ### _Full_ type safety without a lot of boilerplate
@@ -246,7 +308,7 @@ Although we agree that this might be a bit cumbersome, it is a small price to pa
 
 #### Basic usage
 
-The most common way to create a result is by using the [`Result.ok`](#resultokvalue) and [`Result.error](#resulterrorerror)` static methods.
+The most common way to create a result is by using the [`Result.ok`](#resultokvalue) and [`Result.error`](#resulterrorerror) static methods.
 
 The example below produces a result which contains either the outcome of the division or a `DivisionByZeroError` error.
 
@@ -260,13 +322,18 @@ function divide(a: number, b: number) {
 }
 ```
 
-Note that we didn't specify any explicit return type for the `divide` function. In most cases TypeScript is smart enough to infer the result types most of the times for you. In case of the example above, the return type gets inferred to `Result<number, DivisionByZeroError>`. There are good reasons to specify the return type explicitly (e.g. clarity, readability, etc.), but in general it is not technically a necessity and therefore up to you to decide to define your returns explicit or not.
+Note that we didn't specify an explicit return type for the `divide` function. In most cases TypeScript is smart enough to infer the result types most of the times for you. In case of the example above, the return type gets inferred to `Result<number, DivisionByZeroError>`. There are good reasons to specify the return type explicitly (e.g. clarity, readability, etc.), but in general it is not technically a necessity and therefore up to you to decide to define your returns explicit or not.
 
-Also note that when using `Result.ok` it is optional to provide a value (`Result.ok()`), simply because not all operations produce a value. 
+Also note that when using `Result.ok` it is optional to provide a value, simply because not all operations produce a value.
+
+```ts
+// this is fine
+const result = Result.ok(); // Result<void, never>
+```
 
 #### Using `Result.try` and `Result.wrap`
 
-[`Result.try`](#resulttryfn-transform) is a convenient way to wrap code that might throw an error. The method will catch any exceptions that might be thrown and encapsulate them in a failed result. This is especially useful when you want to work with existing or external functions that might throw exceptions. You can view `Result.try` as a replacement for the traditional try-catch block.
+[`Result.try`](#resulttryfn-transform) is a convenient way to wrap code that might throw an error. The method will catch any exceptions that might be thrown and encapsulate them in a failed result. This is especially useful when you want to work with existing or external functions that might throw exceptions. You can often replace traditional try-catch blocks by wrapping the code in `Result.try`:
 
 ```ts
 // Using try-catch
@@ -303,7 +370,7 @@ const result = safeWriteFile("file.txt", "Hello, World!", "utf-8"); // Result<vo
 
 ### Performing operations on a result
 
-Having a result is one thing, but in many cases, you also want to do something with it. The library provides a set of methods to work with results.
+Having a result is one thing, but in many cases, you also want to do something with it. This library provides a set of methods that lets you interact with the instance of a result in various ways.
 
 #### Chaining operations
 
@@ -346,7 +413,7 @@ The chained version is more concise and makes it easier to follow the flow of th
 
 Both [`map`](#maptransformfn) and [`recover`](#recoveronfailure) behave very similar in the sense that they transform a result using function provided by the user into a new result. The main difference is that `map` is used to transform a successful result, while `recover` is used to transform a failed result.
 
-The difference between the 'catching' variants is that they catch any exceptions that might be thrown inside the transformation function and encapsulate them in a failed result. So why would you not always use the 'catching' variants? It might be useful to make a distinction between exceptions that are expected and unexpected. If you _expect_ an exception to be thrown, like in the case of writing a file to disk, you might want to handle this use case. If you _don't expect_ an exception to be thrown, like in the case of saving something to a database, you might want to let the exception bubble up or even terminate the application.
+The difference between the 'catching' variants is that they catch any exceptions that might be thrown inside the transformation function and encapsulate them in a failed result. So why would you not always use the 'catching' variants? It might be useful to make a distinction between exceptions that are expected and unexpected. If you _expect_ an exception to be thrown, like in the case of writing a file to disk, you might want to handle this use case. If you _don't expect_ an exception to be thrown, like in the case of saving something to a database, you might _not_ want to catch the exception and let the exception bubble up or even terminate the application.
 
 Both `map` and `recover` are very flexible when it comes to the returning value of the transformation function. You can return a literal value, a new result, or even a promise that resolves to a value or a result. Other similar result-like libraries might have specific methods for each of thee use cases (e.g. `flatMap`, `chain`, etc.) and can be considered more strict. However, we like the approach of a smaller API surface with more flexibility.
 
@@ -373,11 +440,11 @@ function persistLocally(item: Item): Result<Item, IOError> {
 persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
 ```
 
-Note that after a recovery, any previous errors that might have occurred are _forgotten_. This is because when using `recover` you are essentially starting with a clean slate. In the example above we can assume that the `DbError` has been taken care of and therefore it has been removed from the final result. `IOError` on te other hand is still a possibility.
+Note that after a recovery, any previous errors that might have occurred are _forgotten_. This is because when using `recover` you are essentially starting with a clean slate. In the example above we can assume that the `DbError` has been taken care of and therefore it has been removed from the final result. `IOError` on te other hand is still a possibility because it might occur after the recovery.
 
 #### Side-effects: `onSuccess`, `onFailure`
 
-Sometimes you want to perform side-effects without modifying the result itself. This is where `onSuccess` and `onFailure` come in handy. Both methods allow you to run a callback function when the result is successful or when the result represents a failure. The main difference is that `onSuccess` is used for successful results, while `onFailure` is used for failed results.
+Sometimes you want to perform side-effects without modifying the result itself. This is where `onSuccess` and `onFailure` come in handy. Both methods allow you to run a callback function when the result is successful or when the result represents a failure. The main difference is that `onSuccess` is used for successful results, while `onFailure` is used for failed results. Both methods return the original instance of the result, so you can continue chaining other operations.
 
 In the example below, we log a message when an operation is successful and when it fails:
 
@@ -464,7 +531,7 @@ See the note on [errors](#a-note-on-errors) for more context.
 
 When using custom errors together with a `type` field to distinguish between different error types, you can use conditional checks like 'if-else' or `switch` statements to handle different error types.
 
-In order to perform exhaustive checks you can on the [`noImplicitReturns`](https://www.typescriptlang.org/tsconfig/#noImplicitReturns) compiler option when you are inside the context of a function and you are conditionally returning a value based on the `type` of the error:
+In order to perform exhaustive checks you can rely on the [`noImplicitReturns`](https://www.typescriptlang.org/tsconfig/#noImplicitReturns) compiler option when you are inside the context of a function and you are conditionally returning a value based on the `type` of the error:
 
 ```ts
 class ErrorA extends Error {
@@ -482,7 +549,7 @@ result.fold(
   (error) => { // TS-Error: Not all code paths return a value
     switch (error.type) {
       case "error-a":
-        return /* handle error-a */;
+        return /* something */;
     }
   }
 )
@@ -529,6 +596,8 @@ if (result.isError()) {
   }
 }
 ```
+
+When not all code paths are considered, the `assertUnreachable` function will start to complain. At runtime it will also throw an error when the `default` case is reached.
 
 ### Async operations
 

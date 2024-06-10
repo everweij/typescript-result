@@ -2,7 +2,7 @@ name: Main workflow
 on:
   push:
     branches:
-      - main
+      - master
       - next
 
 concurrency:

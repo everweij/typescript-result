@@ -457,6 +457,14 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 		return new AsyncResult((resolve) => resolve(Result.error(error)));
 	}
 
+	static errorFromPromise(promise: AnyPromise) {
+		return new AsyncResult((resolve) => {
+			promise.then((value) =>
+				resolve(Result.isResult(value) ? value : Result.error(value)),
+			);
+		});
+	}
+
 	/**
 	 * @internal
 	 */
@@ -923,6 +931,54 @@ export class Result<Value, Err> {
 	}
 
 	/**
+	 * Transforms the value of an error result using the {@link transform} callback.
+	 * The {@link transform} callback can also return other {@link Result} or {@link AsyncResult} instances,
+	 * which will be returned as-is (the `Ok` types will be merged).
+	 * The operation will be ignored if the result represents a success.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @returns a new {@linkcode Result} instance with the transformed error, or a new {@linkcode AsyncResult} instance
+	 * if the transform function is async.
+	 *
+	 * > [!NOTE]
+	 * > Any exceptions that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.mapCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * transforming the value of a result
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const transformed = result.mapError((error) => new CustomError('Custom error message')); // Result<number, CustomError>
+	 * ```
+	 *
+	 *
+	 * @example
+	 * doing an async transformation
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const transformed = result.mapError(async (error) => new CustomError(error.message)); // AsyncResult<number, CustomError>
+	 * ```
+	 */
+	mapError<ReturnType>(transform: (error: Err) => ReturnType) {
+		return (
+			this.failure
+				? Result.runError(() => transform(this._error))
+				: isAsyncFn(transform)
+					? AsyncResult.ok(this._value)
+					: this
+		) as ReturnType extends Promise<infer PromiseValue>
+			? PromiseValue extends Result<never, infer ResultError>
+				? AsyncResult<Value, Err | ResultError>
+				: AsyncResult<Value, Err>
+			: ReturnType extends Result<never, infer ResultError>
+				? Result<Value, Err | ResultError>
+				: Result<Value, Err>;
+	}
+
+	/**
 	 * Like {@linkcode Result.map} it transforms the value of a successful result using the {@link transform} callback.
 	 * In addition, it catches any exceptions that might be thrown inside the {@link transform} callback and encapsulates them
 	 * in a failed result.
@@ -1085,6 +1141,18 @@ export class Result<Value, Err> {
 		}
 
 		return Result.isResult(returnValue) ? returnValue : Result.ok(returnValue);
+	}
+
+	private static runError(fn: AnyFunction): AnyResult | AnyAsyncResult {
+		const returnValue = fn();
+
+		if (isPromise(returnValue)) {
+			return AsyncResult.errorFromPromise(returnValue);
+		}
+
+		return Result.isResult(returnValue)
+			? returnValue
+			: Result.error(returnValue);
 	}
 
 	private static allInternal(

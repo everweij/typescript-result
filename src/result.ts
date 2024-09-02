@@ -352,25 +352,64 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	}
 
 	/**
-	 * Like {@linkcode AsyncResult.map} it transforms the value of a successful result using the {@link transform} callback.
-	 * In addition, it catches any exceptions that might be thrown inside the {@link transform} callback and encapsulates them
+	 * Like {@linkcode AsyncResult.map} it transforms the value of a successful result using the {@link transformValue} callback.
+	 * In addition, it catches any exceptions that might be thrown inside the {@link transformValue} callback and encapsulates them
 	 * in a failed result.
 	 *
-	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @param transformValue callback function to transform the value of the result. The callback can be async as well.
+	 * @param transformError callback function to transform any potential caught error while transforming the value.
 	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
 	 */
-	mapCatching<ReturnType>(transform: (value: Value) => ReturnType) {
-		return new AsyncResult<any, any>((resolve) => {
-			this.map(transform)
+	mapCatching<ReturnType, ErrorType = NativeError>(
+		transformValue: (value: Value) => ReturnType,
+		transformError?: (error: unknown) => ErrorType,
+	) {
+		return new AsyncResult<any, any>((resolve, reject) => {
+			this.map(transformValue)
 				.then((result: AnyResult) => resolve(result))
-				.catch((error: unknown) => resolve(Result.error(error)));
+				.catch((error: unknown) => {
+					try {
+						resolve(
+							Result.error(transformError ? transformError(error) : error),
+						);
+					} catch (err) {
+						reject(err);
+					}
+				});
 		}) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
-				? AsyncResult<ResultValue, Err | ResultError | NativeError>
-				: AsyncResult<PromiseValue, Err | NativeError>
+				? AsyncResult<ResultValue, Err | ResultError | ErrorType>
+				: AsyncResult<PromiseValue, Err | ErrorType>
 			: ReturnType extends Result<infer ResultValue, infer ResultError>
-				? AsyncResult<ResultValue, Err | ResultError | NativeError>
-				: AsyncResult<ReturnType, Err | NativeError>;
+				? AsyncResult<ResultValue, Err | ResultError | ErrorType>
+				: AsyncResult<ReturnType, Err | ErrorType>;
+	}
+
+	/**
+	 * Transforms the encapsulated error of a failed result using the {@link transform} callback into a new error.
+	 * This can be useful for instance to capture similar or related errors and treat them as a single higher-level error type
+	 * @param transform callback function to transform the error of the result.
+	 * @returns new {@linkcode AsyncResult} instance with the transformed error.
+	 *
+	 * @example
+	 * transforming the error of a result
+	 * ```ts
+	 * const result = Result.try(() => fetch("https://example.com"))
+	 *  .mapCatching((response) => response.json() as Promise<Data>)
+	 *  .mapError((error) => new FetchDataError("Failed to fetch data", { cause: error }));
+	 * // AsyncResult<Data, FetchDataError>;
+	 * ```
+	 */
+	mapError<NewError>(transform: (error: Err) => NewError) {
+		return new AsyncResult<Value, NewError>((resolve, reject) =>
+			this.then(async (result) => {
+				try {
+					resolve(result.mapError(transform));
+				} catch (error) {
+					reject(error);
+				}
+			}),
+		);
 	}
 
 	/**
@@ -923,24 +962,57 @@ export class Result<Value, Err> {
 	}
 
 	/**
-	 * Like {@linkcode Result.map} it transforms the value of a successful result using the {@link transform} callback.
-	 * In addition, it catches any exceptions that might be thrown inside the {@link transform} callback and encapsulates them
+	 * Like {@linkcode Result.map} it transforms the value of a successful result using the {@link transformValue} callback.
+	 * In addition, it catches any exceptions that might be thrown inside the {@link transformValue} callback and encapsulates them
 	 * in a failed result.
 	 *
-	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @param transformValue callback function to transform the value of the result. The callback can be async as well.
+	 * @param transformError callback function to transform any potential caught error while transforming the value.
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
 	 * if the transform function is async.
 	 */
-	mapCatching<ReturnType>(transform: (value: Value) => ReturnType) {
+	mapCatching<ReturnType, ErrorType = NativeError>(
+		transformValue: (value: Value) => ReturnType,
+		transformError?: (err: unknown) => ErrorType,
+	) {
 		return (
-			this.success ? Result.try(() => transform(this._value)) : this
+			this.success
+				? Result.try(
+						() => transformValue(this._value),
+						transformError as AnyFunction,
+					)
+				: this
 		) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
-				? AsyncResult<ResultValue, Err | ResultError | NativeError>
-				: AsyncResult<PromiseValue, Err | NativeError>
+				? AsyncResult<ResultValue, Err | ResultError | ErrorType>
+				: AsyncResult<PromiseValue, Err | ErrorType>
 			: ReturnType extends Result<infer ResultValue, infer ResultError>
-				? Result<ResultValue, Err | ResultError | NativeError>
-				: Result<ReturnType, Err | NativeError>;
+				? Result<ResultValue, Err | ResultError | ErrorType>
+				: Result<ReturnType, Err | ErrorType>;
+	}
+
+	/**
+	 * Transforms the encapsulated error of a failed result using the {@link transform} callback into a new error.
+	 * This can be useful for instance to capture similar or related errors and treat them as a single higher-level error type
+	 * @param transform callback function to transform the error of the result.
+	 * @returns new {@linkcode Result} instance with the transformed error.
+	 *
+	 * @example
+	 * transforming the error of a result
+	 * ```ts
+	 * declare const result: Result<number, ErrorA>;
+	 *
+	 * result.mapError((error) => new ErrorB(error.message)); // Result<number, ErrorB>
+	 * ```
+	 */
+	mapError<NewError>(
+		transform: (error: Err) => NewError,
+	): Result<Value, NewError> {
+		if (this.success) {
+			return this as Result<Value, any>;
+		}
+
+		return Result.error(transform(this._error));
 	}
 
 	/**

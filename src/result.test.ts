@@ -1235,6 +1235,94 @@ describe("Result", () => {
 				Result.assertError(nextResult);
 				expect(spy).not.toHaveBeenCalled();
 			});
+
+			it("allows you to transform any caught error during the mapping", () => {
+				const result = Result.ok(2).mapCatching(
+					(): number => {
+						throw new Error("boom");
+					},
+					(err) => {
+						expectTypeOf(err).toBeUnknown();
+						return new ErrorA();
+					},
+				);
+
+				expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA>>();
+
+				Result.assertError(result);
+
+				expect(result.error).toBeInstanceOf(ErrorA);
+			});
+
+			it("throws when an exception is thrown while transforming the error", () => {
+				const fn = () =>
+					Result.ok(2).mapCatching(
+						(): number => {
+							throw new CustomError();
+						},
+						() => {
+							throw new Error("boom");
+						},
+					);
+
+				expect(fn).to.throw(/boom/);
+			});
+
+			it("allows you to transform any caught error during async mapping", async () => {
+				const result = await (
+					Result.ok(2) as Result<number, ErrorA>
+				).mapCatching(
+					async (): Promise<number> => {
+						throw new Error("boom");
+					},
+					(err) => {
+						expectTypeOf(err).toBeUnknown();
+						return new ErrorB();
+					},
+				);
+
+				expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA | ErrorB>>();
+
+				Result.assertError(result);
+
+				expect(result.error).toBeInstanceOf(ErrorB);
+			});
+		});
+
+		describe("mapError", () => {
+			it("lets you transform the error of a failed result into a new error", () => {
+				const result = Result.error(new ErrorA()) as Result<number, ErrorA>;
+
+				const nextResult = result.mapError((error) => {
+					expectTypeOf(error).toEqualTypeOf<ErrorA>();
+					return new ErrorB();
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<Result<number, ErrorB>>();
+
+				Result.assertError(nextResult);
+
+				expect(nextResult.error).toBeInstanceOf(ErrorB);
+			});
+
+			it("throws when an exception is thrown while transforming the error", () => {
+				const fn = () =>
+					Result.error(new ErrorA()).mapError(() => {
+						throw new Error("boom");
+					});
+
+				expect(fn).to.throw(/boom/);
+			});
+
+			it("ignores the operation when the result is ok", () => {
+				const result = Result.ok(2);
+
+				const spy = vi.fn();
+				const nextResult = result.mapError(spy);
+
+				Result.assertOk(nextResult);
+				expect(spy).not.toHaveBeenCalled();
+			});
 		});
 
 		describe("recover", () => {
@@ -1979,6 +2067,101 @@ describe("AsyncResult", () => {
 
 				Result.assertError(result);
 				expect(result.error).toBeInstanceOf(CustomError);
+			});
+
+			it("allows you to transform any caught error during the mapping", async () => {
+				const asyncResult = AsyncResult.ok(2).mapCatching(
+					(): number => {
+						throw new Error("boom");
+					},
+					(err) => {
+						expectTypeOf(err).toBeUnknown();
+						return new ErrorA();
+					},
+				);
+
+				expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<number, ErrorA>>();
+
+				const result = await asyncResult;
+
+				Result.assertError(result);
+
+				expect(result.error).toBeInstanceOf(ErrorA);
+			});
+
+			it("throws when an exception is thrown while transforming the error", async () => {
+				const fn = () =>
+					AsyncResult.ok(2).mapCatching(
+						(): number => {
+							throw new CustomError();
+						},
+						() => {
+							throw new Error("boom");
+						},
+					);
+
+				await expect(fn).rejects.toThrow(/boom/);
+			});
+
+			it("allows you to transform any caught error during async mapping", async () => {
+				const result = await (
+					AsyncResult.ok(2) as AsyncResult<number, ErrorA>
+				).mapCatching(
+					async (): Promise<number> => {
+						throw new Error("boom");
+					},
+					(err) => {
+						expectTypeOf(err).toBeUnknown();
+						return new ErrorB();
+					},
+				);
+
+				expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA | ErrorB>>();
+
+				Result.assertError(result);
+
+				expect(result.error).toBeInstanceOf(ErrorB);
+			});
+		});
+
+		describe("mapError", () => {
+			it("lets you transform the error of a failed result into a new error", async () => {
+				const result = AsyncResult.error(new ErrorA()) as AsyncResult<
+					number,
+					ErrorA
+				>;
+
+				const nextResult = result.mapError((error) => {
+					expectTypeOf(error).toEqualTypeOf<ErrorA>();
+					return new ErrorB();
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<AsyncResult<number, ErrorB>>();
+
+				const resolvedNextResult = await nextResult;
+
+				Result.assertError(resolvedNextResult);
+
+				expect(resolvedNextResult.error).toBeInstanceOf(ErrorB);
+			});
+
+			it("throws when an exception is thrown while transforming the error", async () => {
+				const fn = () =>
+					AsyncResult.error(new ErrorA()).mapError(() => {
+						throw new Error("boom");
+					});
+
+				await expect(fn).rejects.toThrow(/boom/);
+			});
+
+			it("ignores the operation when the result is ok", async () => {
+				const result = AsyncResult.ok(2);
+
+				const spy = vi.fn();
+				const nextResult = await result.mapError(spy);
+
+				Result.assertOk(nextResult);
+				expect(spy).not.toHaveBeenCalled();
 			});
 		});
 

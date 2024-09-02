@@ -351,6 +351,41 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				: AsyncResult<ReturnType, Err>;
 	}
 
+	mapError<ReturnType>(transform: (error: Err) => ReturnType) {
+		return new AsyncResult<any, any>((resolve, reject) =>
+			this.then((result) => {
+				if (result.isError()) {
+					try {
+						const returnValue = transform((result as { error: Err }).error);
+						if (isPromise(returnValue)) {
+							returnValue
+								.then((value) =>
+									resolve(Result.isResult(value) ? value : Result.error(value)),
+								)
+								.catch(reject);
+						} else {
+							resolve(
+								Result.isResult(returnValue)
+									? returnValue
+									: Result.error(returnValue),
+							);
+						}
+					} catch (error) {
+						reject(error);
+					}
+				} else {
+					resolve(result);
+				}
+			}),
+		) as ReturnType extends Promise<infer PromiseValue>
+			? PromiseValue extends Result<never, infer ResultError>
+				? AsyncResult<Value, Err | ResultError>
+				: AsyncResult<Value, Err>
+			: ReturnType extends Result<never, infer ResultError>
+				? AsyncResult<Value, Err | ResultError>
+				: AsyncResult<Value, Err>;
+	}
+
 	/**
 	 * Like {@linkcode AsyncResult.map} it transforms the value of a successful result using the {@link transform} callback.
 	 * In addition, it catches any exceptions that might be thrown inside the {@link transform} callback and encapsulates them

@@ -2118,6 +2118,119 @@ describe("AsyncResult", () => {
 			});
 		});
 
+		describe("mapError", () => {
+			it("maps an encapsulated error value to a next result using a transform function", async () => {
+				const result: AsyncResult<number, CustomError> = AsyncResult.error(
+					new CustomError("TEST_ERROR"),
+				);
+				const nextResult = result.mapError(
+					(error) => new CustomError("MAPPED_ERROR", { cause: error }),
+				);
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<number, CustomError>
+				>();
+				const resolvedResult = await nextResult;
+				Result.assertError(resolvedResult);
+				expect(resolvedResult.error.message).toBe("MAPPED_ERROR");
+			});
+
+			it("maps an encapsulated error value to an async-result using an async transform function", async () => {
+				const result = AsyncResult.error(new CustomError());
+				const nextAsyncResult = result.mapError(
+					async (error) => new CustomError("MAPPED_ERROR", { cause: error }),
+				);
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<never, CustomError>
+				>();
+				expect(nextAsyncResult).toBeInstanceOf(AsyncResult);
+
+				const nextResult = await nextAsyncResult;
+
+				Result.assertError(nextResult);
+				expect(nextResult.error.message).toBe("MAPPED_ERROR");
+			});
+
+			it("lets you map over an encapsulated success value by simply ignoring the transform function and returning the success result", async () => {
+				const result = AsyncResult.ok(2) as AsyncResult<number, CustomError>;
+
+				const spy = vi.fn();
+				const nextResult = result.mapError((_error) => {
+					spy();
+					return new CustomError();
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<number, CustomError>
+				>();
+				expect(spy).not.toHaveBeenCalled();
+
+				// Async result will always return a new instance
+				expect(result).not.toBe(nextResult);
+
+				const resolvedResult = await nextResult;
+				Result.assertOk(resolvedResult);
+				expect(resolvedResult.value).toEqual(2);
+			});
+
+			it("flattens a returning result from the transformation", async () => {
+				const result = AsyncResult.error(new CustomError("TEST_ERROR"));
+				const nextResult = result.mapError((error) =>
+					Result.error(new CustomError(`FROM_${error.message}`)),
+				);
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<never, CustomError>
+				>();
+
+				const resolvedResult = await nextResult;
+				Result.assertError(resolvedResult);
+				expect(resolvedResult.error.message).toBe("FROM_TEST_ERROR");
+				expect(result).not.toBe(nextResult);
+			});
+
+			it("flattens a returning result from the async transformation", async () => {
+				const result = AsyncResult.error(new CustomError("TEST_ERROR"));
+				const nextAsyncResult = result.mapError(
+					async (error) => new CustomError(`FROM_${error.message}`),
+				);
+
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<never, CustomError>
+				>();
+
+				const nextResult = await nextAsyncResult;
+
+				Result.assertError(nextResult);
+				expect(nextResult.error.message).toBe("FROM_TEST_ERROR");
+				expect(result).not.toBe(nextResult);
+			});
+
+			it("flattens a returning async-result from the transformation", async () => {
+				const result = AsyncResult.error(new CustomError("TEST_ERROR"));
+				const otherAsyncResult = Result.fromAsyncCatching(
+					Promise.reject(new CustomError("OTHER_ERROR")),
+				);
+
+				const nextAsyncResult = result.mapError(() => otherAsyncResult);
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<never, CustomError>
+				>();
+
+				const nextResult = await nextAsyncResult;
+
+				Result.assertError(nextResult);
+				expect(nextResult.error.message).toBe("OTHER_ERROR");
+				expect(result).not.toBe(nextResult);
+			});
+
+			it("does not track errors thrown inside the transformation function", async () => {
+				await expect(() =>
+					AsyncResult.error(new CustomError()).mapError((): Error => {
+						throw new CustomError();
+					}),
+				).rejects.toThrow(CustomError);
+			});
+		});
+
 		describe("mapCatching", () => {
 			it("does track errors thrown inside the transformation function", async () => {
 				const result = await AsyncResult.ok(2).mapCatching((): number => {

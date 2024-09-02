@@ -1376,6 +1376,22 @@ describe("Result", () => {
 				Result.assertError(nextResult);
 				expect(spy).not.toHaveBeenCalled();
 			});
+
+			it("transforms thrown errors when an errorTransoform function is defined", async () => {
+				const result: Result<number, CustomError> = await Result.ok(
+					2,
+				).mapCatching(
+					async (): Promise<number> => {
+						throw new Error("TEST_ERROR");
+					},
+					(_error) => {
+						return new CustomError();
+					},
+				);
+
+				Result.assertError(result);
+				expect(result.error).toBeInstanceOf(CustomError);
+			});
 		});
 
 		describe("recover", () => {

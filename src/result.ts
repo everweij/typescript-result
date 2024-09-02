@@ -987,9 +987,17 @@ export class Result<Value, Err> {
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
 	 * if the transform function is async.
 	 */
-	mapCatching<ReturnType>(transform: (value: Value) => ReturnType) {
+	mapCatching<ReturnType, ErrorType extends AnyValue>(
+		transform: (value: Value) => ReturnType,
+		errorTransform?: (error: unknown) => ErrorType,
+	) {
 		return (
-			this.success ? Result.try(() => transform(this._value)) : this
+			this.success
+				? Result.try(
+						() => transform(this._value),
+						(error: any) => (errorTransform ? errorTransform(error) : error),
+					)
+				: this
 		) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
 				? AsyncResult<ResultValue, Err | ResultError | NativeError>

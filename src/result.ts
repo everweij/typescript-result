@@ -351,6 +351,37 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				: AsyncResult<ReturnType, Err>;
 	}
 
+	/**
+	 * Transforms the value of an error result using the {@link transform} callback.
+	 * The {@link transform} callback can also return other {@link Result} or {@link AsyncResult} instances,
+	 * which will be returned as-is (the `Error` types will be merged).
+	 * The operation will be ignored if the result represents a success.
+	 *
+	 * @param transform callback function to transform the error of the result. The callback can be async as well.
+	 * @returns a new {@linkcode AsyncResult} instance with the transformed error
+	 *
+	 * > [!NOTE]
+	 * > Any exceptions or rejections that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode AsyncResult.mapCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * transforming the value of a result
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const transformed = result.mapError((error) => new CustomError()); // AsyncResult<number, CustomError>
+	 * ```
+	 *
+	 * @example
+	 * returning a result instance
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 * declare function createCustomError(error: unknown): Result<never, CustomError>;
+	 *
+	 * const transformed = result.mapError((error) => createCustomError(error)); // AsyncResult<number, CustomError>
+	 * ```
+	 */
 	mapError<ReturnType>(transform: (error: Err) => ReturnType) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
@@ -392,13 +423,19 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * in a failed result.
 	 *
 	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @param errorTransform optional callback function to transform the value of the error. The callback can be async as well.
 	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
 	 */
-	mapCatching<ReturnType>(transform: (value: Value) => ReturnType) {
+	mapCatching<ReturnType, ErrorType extends AnyValue>(
+		transform: (value: Value) => ReturnType,
+		errorTransform?: (error: unknown) => ErrorType,
+	) {
 		return new AsyncResult<any, any>((resolve) => {
 			this.map(transform)
 				.then((result: AnyResult) => resolve(result))
-				.catch((error: unknown) => resolve(Result.error(error)));
+				.catch((error: unknown) =>
+					resolve(Result.error(errorTransform ? errorTransform(error) : error)),
+				);
 		}) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
 				? AsyncResult<ResultValue, Err | ResultError | NativeError>
@@ -1019,6 +1056,7 @@ export class Result<Value, Err> {
 	 * in a failed result.
 	 *
 	 * @param transform callback function to transform the value of the result. The callback can be async as well.
+	 * @param errorTransform optional callback function to transform the value of the error. The callback can be async as well.
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
 	 * if the transform function is async.
 	 */

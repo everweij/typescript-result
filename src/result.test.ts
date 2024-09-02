@@ -1377,7 +1377,7 @@ describe("Result", () => {
 				expect(spy).not.toHaveBeenCalled();
 			});
 
-			it("transforms thrown errors when an errorTransoform function is defined", async () => {
+			it("transforms thrown errors when an errorTransform function is defined", async () => {
 				const result: Result<number, CustomError> = await Result.ok(
 					2,
 				).mapCatching(
@@ -2244,6 +2244,20 @@ describe("AsyncResult", () => {
 				const result = await AsyncResult.ok(2).mapCatching(
 					async (): Promise<number> => {
 						throw new CustomError();
+					},
+				);
+
+				Result.assertError(result);
+				expect(result.error).toBeInstanceOf(CustomError);
+			});
+
+			it("transforms thrown errors when an errorTransform function is defined", async () => {
+				const result = await AsyncResult.ok(2).mapCatching(
+					async (): Promise<number> => {
+						throw new Error("TEST_ERROR");
+					},
+					(_error) => {
+						return new CustomError();
 					},
 				);
 

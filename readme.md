@@ -81,13 +81,6 @@ function readFile(path: string) {
   );
 }
 
-function parseJson(value: string) {
-  return Result.try(
-    () => JSON.parse(value),
-    (error) => new ParseError("Unable to parse JSON", { cause: error })
-  );
-}
-
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -101,21 +94,27 @@ function getConfig(value: unknown) {
     return Result.error(new ValidationError("Missing or invalid 'name' field"));
   }
   if (!value.version || !isString(value.version)) {
-    return Result.error(new ValidationError("Missing or invalid 'version' field"));
+    return Result.error(
+      new ValidationError("Missing or invalid 'version' field")
+    );
   }
 
   return Result.ok({ name: value.name, version: value.version });
 }
 
 const message = await readFile("./config.json")
-  .map((contents) => parseJson(contents))
+  .mapCatching(
+    (contents) => JSON.parse(contents),
+    (error) => new ParseError("Unable to parse JSON", { cause: error })
+  )
   .map((json) => getConfig(json))
   .fold(
     (config) =>
       `Successfully read config: name => ${config.name}, version => ${config.version}`,
+
     (error) => {
       switch (error.type) {
-        case "io-error": 
+        case "io-error":
           return "Please check if the config file exists and is readable";
         case "parse-error":
           return "Please check if the config file contains valid JSON";
@@ -409,11 +408,21 @@ if (result.isOk()) {
 
 The chained version is more concise and makes it easier to follow the flow of the program. Moreover, it allows us to _centralize_ error handling at the end of the flow. This is possible because all transformative operations produce new results which carry over any errors that might have occurred earlier in the chain.
 
-#### Transform: `map`, `mapCatching`, `recover`, `recoverCatching`
+#### Transform: `map`, `mapCatching`, `recover`, `recoverCatching`, `mapError`
 
 Both [`map`](#maptransformfn) and [`recover`](#recoveronfailure) behave very similar in the sense that they transform a result using function provided by the user into a new result. The main difference is that `map` is used to transform a successful result, while `recover` is used to transform a failed result.
 
 The difference between the 'catching' variants is that they catch any exceptions that might be thrown inside the transformation function and encapsulate them in a failed result. So why would you not always use the 'catching' variants? It might be useful to make a distinction between exceptions that are expected and unexpected. If you _expect_ an exception to be thrown, like in the case of writing a file to disk, you might want to handle this use case. If you _don't expect_ an exception to be thrown, like in the case of saving something to a database, you might _not_ want to catch the exception and let the exception bubble up or even terminate the application.
+
+There's a subtle difference with `mapCatching` however. It takes an optional second argument which is a function that lets you transform any caught exception that was thrown inside the transformation function. This is useful when you want to provide more context or when you want to wrap the error in a custom error type.
+
+```ts
+readFile("source.txt")
+  .mapCatching(
+    (contents) => writeFile("destination.txt", contents.toUpperCase()),
+    (error) => new IOError("Failed to write file", { cause: error })
+  )
+```
 
 Both `map` and `recover` are very flexible when it comes to the returning value of the transformation function. You can return a literal value, a new result, or even a promise that resolves to a value or a result. Other similar result-like libraries might have specific methods for each of thee use cases (e.g. `flatMap`, `chain`, etc.) and can be considered more strict. However, we like the approach of a smaller API surface with more flexibility.
 
@@ -441,6 +450,15 @@ persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
 ```
 
 Note that after a recovery, any previous errors that might have occurred are _forgotten_. This is because when using `recover` you are essentially starting with a clean slate. In the example above we can assume that the `DbError` has been taken care of and therefore it has been removed from the final result. `IOError` on te other hand is still a possibility because it might occur after the recovery.
+
+Lastly, you can use `mapError` to transform the error of a failed result. This is especially useful when you want to transform the error into a different error type, or when you want to provide more context to the error:
+
+```ts
+Result.try(() => fs.readFileSync("source.txt", "utf-8"))
+  .mapCatching(contents => fs.writeFileSync("destination.txt", contents.toUpperCase(), "utf-8"))
+  .mapError((error) => new IOError("Failed to transform file", { cause: error }));
+  // Result<void, IOError>
+```
 
 #### Side-effects: `onSuccess`, `onFailure`
 
@@ -648,8 +666,9 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
     - [fold(onSuccess, onFailure)](#foldonsuccess-onfailure)
     - [onFailure(action)](#onfailureaction)
     - [onSuccess(action)](#onsuccessaction)
-    - [map(transform)](#maptransform)
-    - [mapCatching(transform)](#mapcatchingtransform)
+    - [map(transformFn)](#maptransformfn)
+    - [mapCatching(transformFn, transformErrorFn?)](#mapcatchingtransformfn-transformerrorfn)
+    - [mapError(transformFn)](#maperrortransformfn)
     - [recover(onFailure)](#recoveronfailure)
     - [recoverCatching(onFailure)](#recovercatchingonfailure)
   - Static methods
@@ -678,7 +697,8 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
     - [onFailure(action)](#onfailureaction-1)
     - [onSuccess(action)](#onsuccessaction-1)
     - [map(transformFn)](#maptransformfn-1)
-    - [mapCatching(transformFn)](#mapcatchingtransformfn-1)
+    - [mapCatching(transformFn, transfornErrorFn?)](#mapcatchingtransformfn-transformerrorfn-1)
+    - [mapError(transformFn)](#maperrortransformfn-1)
     - [recover(onFailure)](#recoveronfailure-1)
     - [recoverCatching(onFailure)](#recovercatchingonfailure-1)
 
@@ -963,7 +983,7 @@ if the `transformFn` function is async.
 
 > [!NOTE]
 > Any exceptions that might be thrown inside the `transformFn` callback are not caught, so it is your responsibility
-> to handle these exceptions. Please refer to [`Result.mapCatching()`](#mapcatchingtransformfn) for a version that catches exceptions
+> to handle these exceptions. Please refer to [`Result.mapCatching()`](#mapcatchingtransformfn-transformerrorfn) for a version that catches exceptions
 > and encapsulates them in a failed result.
 
 #### Example
@@ -1001,7 +1021,7 @@ declare function storeValue(value: number): AsyncResult<boolean, Error>;
 const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 ```
 
-### mapCatching(transformFn)
+### mapCatching(transformFn, transformErrorFn?)
 
 Like [`Result.map`](#maptransformfn) it transforms the value of a successful result using the `transform` callback.
 In addition, it catches any exceptions that might be thrown inside the `transform` callback and encapsulates them
@@ -1010,8 +1030,30 @@ in a failed result.
 #### Parameters
 
 - `transformFn` callback function to transform the value of the result. The callback can be async as well.
+- `transformErrorFn` optional callback function that transforms any caught error inside `transformFn` into a specific error.
 
 **returns** * a new [`Result`](#result) instance with the transformed value, or a new [`AsyncResult`](#asyncresult) instance if the transform function is async.
+
+### mapError(transformFn)
+
+Transforms the error of a failed result using the `transform` callback into a new error.
+This can be useful when you want to transform the error into a different error type, or when you want to provide more context to the error.
+
+#### Parameters
+
+- `transformFn` callback function to transform the error of the result.
+
+**returns** a new failed [`Result`](#result) instance with the transformed error.
+
+#### Example
+
+transforming the error into a different error type
+
+```ts
+declare const result: Result<number, Error>;
+
+result.mapError((error) => new ErrorB(error.message)); // Result<number, ErrorB>
+```
 
 ### recover(onFailure)
 
@@ -1463,7 +1505,7 @@ The operation will be ignored if the result represents a failure.
 
 > [!NOTE]
 > Any exceptions that might be thrown inside the `transform` callback are not caught, so it is your responsibility
-> to handle these exceptions. Please refer to [`AsyncResult.mapCatching`](#mapcatchingtransformfn-1) for a version that catches exceptions
+> to handle these exceptions. Please refer to [`AsyncResult.mapCatching`](#mapcatchingtransformfn-transformerrorfn-1) for a version that catches exceptions
 > and encapsulates them in a failed result.
 
 #### Example
@@ -1501,7 +1543,7 @@ declare function storeValue(value: number): AsyncResult<boolean, Error>;
 const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 ```
 
-### mapCatching(transformFn)
+### mapCatching(transformFn, transformErrorFn?)
 
 Like [`AsyncResult.map`](#maptransformfn-1) it transforms the value of a successful result using the `transformFn` callback.
 In addition, it catches any exceptions that might be thrown inside the `transformFn` callback and encapsulates them
@@ -1510,8 +1552,32 @@ in a failed result.
 #### Parameters
 
 - `transformFn` callback function to transform the value of the result. The callback can be async as well.
+- `transformErrorFn` optional callback function that transforms any caught error inside `transformFn` into a specific error.
 
 **returns** a new [`AsyncResult`](#asyncresult) instance with the transformed value
+
+### mapError(transformFn)
+
+Transforms the error of a failed result using the `transform` callback into a new error.
+This can be useful when you want to transform the error into a different error type, or when you want to provide more context to the error.
+
+#### Parameters
+
+- `transformFn` callback function to transform the error of the result.
+
+**returns** a new failed [`AsyncResult`](#asyncresult) instance with the transformed error.
+
+#### Example
+
+transforming the error into a different error type
+
+```ts
+const result = Result.try(() => fetch("https://example.com"))
+  .mapCatching((response) => response.json() as Promise<Data>)
+  .mapError((error) => new FetchDataError("Failed to fetch data", { cause: error }));
+  // AsyncResult<Data, FetchDataError>;
+```
+
 
 ### recover(onFailure)
 

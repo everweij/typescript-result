@@ -1,7 +1,7 @@
 {
 	"private": false,
 	"name": "typescript-result",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"description": "A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable.",
 	"keywords": [
 		"result",
@@ -51,19 +51,19 @@
 		"test": "vitest",
 		"test:ci": "vitest run",
 		"coverage": "vitest run --coverage",
-		"lint": "biome check --apply src",
+		"lint": "biome check --write src",
 		"typecheck": "tsc --noEmit",
 		"prepare": "husky",
 		"build": "tsup",
 		"gzip-size": "npx gzip-size-cli ./dist/index.js"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.7.3",
-		"@types/node": "^20.12.12",
-		"@vitest/coverage-v8": "^1.6.0",
-		"husky": "^9.0.11",
-		"tsup": "^8.0.2",
-		"typescript": "^5.4.5",
-		"vitest": "^1.6.0"
+		"@biomejs/biome": "1.8.3",
+		"@types/node": "^22.5.2",
+		"@vitest/coverage-v8": "^2.0.5",
+		"husky": "^9.1.5",
+		"tsup": "^8.2.4",
+		"typescript": "^5.5.4",
+		"vitest": "^2.0.5"
 	}
 }

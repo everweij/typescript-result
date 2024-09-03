@@ -835,7 +835,7 @@ describe("Result", () => {
 			it("returns the encapsulated value when the result is ok", () => {
 				const result = Result.ok(2);
 
-				const elseFn = vi.fn<[], number>().mockReturnValue(4);
+				const elseFn = vi.fn().mockReturnValue(4) as () => number;
 
 				expect(result.getOrElse(elseFn)).toBe(2);
 				expect(elseFn).not.toHaveBeenCalled();
@@ -1710,7 +1710,7 @@ describe("AsyncResult", () => {
 			it("returns the encapsulated value when the result is ok", async () => {
 				const result = AsyncResult.ok(2);
 
-				const elseFn = vi.fn<[], number>().mockReturnValue(4);
+				const elseFn = vi.fn().mockReturnValue(4) as () => number;
 
 				expect(await result.getOrElse(elseFn)).toBe(2);
 				expect(elseFn).not.toHaveBeenCalled();

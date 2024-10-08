@@ -1886,6 +1886,16 @@ describe("AsyncResult", () => {
 				expect(spy).toHaveBeenCalled();
 			});
 
+			it("handles callbacks that return a promise as well", async () => {
+				const result = AsyncResult.error(errorA);
+
+				const spy = vi.fn();
+
+				await result.onFailure(() => Promise.resolve().then(sleep).then(spy));
+
+				expect(spy).toHaveBeenCalled();
+			});
+
 			it("throws an error when the callback throws an error", async () => {
 				await expect(() =>
 					AsyncResult.error(errorA).onFailure(() => {
@@ -1943,6 +1953,16 @@ describe("AsyncResult", () => {
 						throw new CustomError();
 					}),
 				).rejects.toThrow(CustomError);
+			});
+
+			it("handles callbacks that return a promise as well", async () => {
+				const result = AsyncResult.ok(12);
+
+				const spy = vi.fn();
+
+				await result.onSuccess(() => Promise.resolve().then(sleep).then(spy));
+
+				expect(spy).toHaveBeenCalled();
 			});
 		});
 

@@ -212,11 +212,15 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 *   .map((value) => value * 2); // proceed with other operations
 	 * ```
 	 */
-	onFailure(action: (error: Err) => void): AsyncResult<Value, Err> {
+	onFailure(
+		action: (error: Err) => void | Promise<void>,
+	): AsyncResult<Value, Err> {
 		return new AsyncResult<Value, Err>((resolve, reject) =>
 			this.then(async (result) => {
 				try {
-					await result.onFailure(action);
+					if (result.isError()) {
+						await action(result.error as Err);
+					}
 					resolve(result);
 				} catch (e) {
 					reject(e);
@@ -254,11 +258,15 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(value));
 	 * ```
 	 */
-	onSuccess(action: (value: Value) => void): AsyncResult<Value, Err> {
+	onSuccess(
+		action: (value: Value) => void | Promise<void>,
+	): AsyncResult<Value, Err> {
 		return new AsyncResult<Value, Err>((resolve, reject) =>
 			this.then(async (result) => {
 				try {
-					await result.onSuccess(action);
+					if (result.isOk()) {
+						await action(result.value as Value);
+					}
 					resolve(result);
 				} catch (error) {
 					reject(error);

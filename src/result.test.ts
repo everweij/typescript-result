@@ -892,9 +892,7 @@ describe("Result", () => {
 			it("throws the encapsulated error when the result represents a failure", () => {
 				const result = Result.error(new CustomError());
 
-				expect(() => result.getOrThrow()).toThrow(
-					/Expected a value, but got an error instead/i,
-				);
+				expect(() => result.getOrThrow()).toThrow(CustomError);
 			});
 		});
 
@@ -1765,9 +1763,7 @@ describe("AsyncResult", () => {
 			it("throws the encapsulated error when the result represents a failure", async () => {
 				const result = AsyncResult.error(new CustomError());
 
-				await expect(() => result.getOrThrow()).rejects.toThrow(
-					/Expected a value, but got an error instead/i,
-				);
+				await expect(() => result.getOrThrow()).rejects.toThrow(CustomError);
 			});
 		});
 

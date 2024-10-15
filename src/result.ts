@@ -760,9 +760,7 @@ export class Result<Value, Err> {
 			return this._value;
 		}
 
-		throw new Error("Expected a value, but got an error instead", {
-			cause: this._error,
-		});
+		throw this._error;
 	}
 
 	/**

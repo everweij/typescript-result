@@ -132,10 +132,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 *
 	 * @returns The encapsulated value if the result is successful.
 	 *
-	 * @throws an error if the result is a failure.
-	 *
-	 * > [!IMPORTANT]
-	 * > The error thrown will have the original error set as the `cause` property.
+	 * @throws the encapsulated error if the result is a failure.
 	 *
 	 * @example
 	 * obtaining the value of a result, or throwing an error
@@ -742,10 +739,7 @@ export class Result<Value, Err> {
 	 *
 	 * @returns The value if the result is successful.
 	 *
-	 * @throws an error if the result is a failure.
-	 *
-	 * > [!IMPORTANT]
-	 * > The error thrown will have the original error set as the `cause` property.
+	 * @throws the encapsulated error if the result is a failure.
 	 *
 	 * @example
 	 * obtaining the value of a result, or throwing an error

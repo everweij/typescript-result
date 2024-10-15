@@ -861,10 +861,7 @@ Retrieves the value of the result, or throws an error if the result is a failure
 
 **returns** The value if the result is successful.
 
-**throws** an error if the result is a failure.
-
-> [!IMPORTANT]
-> The error thrown will have the original error set as the `cause` property.
+**throws** the encapsulated error if the result is a failure.
 
 #### Example
 obtaining the value of a result, or throwing an error
@@ -1383,10 +1380,7 @@ Retrieves the encapsulated value of the result, or throws an error if the result
 
 **returns** The encapsulated value if the result is successful.
 
-**throws** an error if the result is a failure.
-
-> [!IMPORTANT]
-> The error thrown will have the original error set as the `cause` property.
+**throws** the encapsulated error if the result is a failure.
 
 #### Example
 obtaining the value of a result, or throwing an error

@@ -15,6 +15,8 @@ import type {
 } from "./helpers.js";
 import { isAsyncFn, isFunction, isPromise } from "./helpers.js";
 
+// TODO: also add transformError fn to regular map function??
+
 type InferError<T> = T extends Result<any, infer Error> ? Error : never;
 type InferValue<T> = T extends Result<infer Value, any> ? Value : T;
 
@@ -52,10 +54,53 @@ type AccountForFunctionThrowing<Items extends any[]> =
  */
 export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	/**
+	 * Utiltity getter to infer the value type of the result.
+	 * Note: this getter does not hold any value, it's only used for type inference.
+	 */
+	declare $inferValue: Value;
+
+	/**
+	 * Utiltity getter to infer the error type of the result.
+	 * Note: this getter does not hold any value, it's only used for type inference.
+	 */
+	declare $inferError: Err;
+
+	/**
 	 * Utility getter to check if the current instance is an `AsyncResult`.
 	 */
 	get isAsyncResult(): true {
 		return true;
+	}
+
+	/**
+	 * @returns the result in a tuple format where the first element is the value and the second element is the error.
+	 * If the result is successful, the error will be `null`. If the result is a failure, the value will be `null`.
+	 *
+	 * This method is especially useful when you want to destructure the result into a tuple and use TypeScript's narrowing capabilities.
+	 *
+	 * @example Narrowing down the result type using destructuring
+	 * ```ts
+	 * declare const result: AsyncResult<number, ErrorA>;
+	 *
+	 * const [value, error] = await result.toTuple();
+	 *
+	 * if (error) {
+	 *   // error is ErrorA
+	 *   return;
+	 * }
+	 *
+	 * // value must be a number
+	 * ```
+	 */
+	async toTuple(): Promise<
+		[Err] extends [never]
+			? [value: Value, error: never]
+			: [Value] extends [never]
+				? [value: never, error: Err]
+				: [value: Value, error: null] | [value: null, error: Err]
+	> {
+		const result = await this;
+		return result.toTuple();
 	}
 
 	/**
@@ -550,6 +595,18 @@ export class Result<Value, Err> {
 	) {}
 
 	/**
+	 * Utiltity getter to infer the value type of the result.
+	 * Note: this getter does not hold any value, it's only used for type inference.
+	 */
+	declare $inferValue: Value;
+
+	/**
+	 * Utiltity getter to infer the error type of the result.
+	 * Note: this getter does not hold any value, it's only used for type inference.
+	 */
+	declare $inferError: Err;
+
+	/**
 	 * Utility getter that checks if the current instance is a `Result`.
 	 */
 	get isResult(): true {
@@ -659,6 +716,34 @@ export class Result<Value, Err> {
 	 */
 	isError(): this is Result<never, [Err] extends [never] ? AnyValue : Err> {
 		return this.failure;
+	}
+
+	/**
+	 * @returns the result in a tuple format where the first element is the value and the second element is the error.
+	 * If the result is successful, the error will be `null`. If the result is a failure, the value will be `null`.
+	 *
+	 * This method is especially useful when you want to destructure the result into a tuple and use TypeScript's narrowing capabilities.
+	 *
+	 * @example Narrowing down the result type using destructuring
+	 * ```ts
+	 * declare const result: Result<number, ErrorA>;
+	 *
+	 * const [value, error] = result.toTuple();
+	 *
+	 * if (error) {
+	 *   // error is ErrorA
+	 *   return;
+	 * }
+	 *
+	 * // value must be a number
+	 * ```
+	 */
+	toTuple() {
+		return [this._value ?? null, this._error ?? null] as [Err] extends [never]
+			? [value: Value, error: never]
+			: [Value] extends [never]
+				? [value: never, error: Err]
+				: [value: Value, error: null] | [value: null, error: Err];
 	}
 
 	/**

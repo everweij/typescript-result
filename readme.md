@@ -797,6 +797,27 @@ if (result.isError()) {
 }
 ```
 
+### toTuple()
+
+**returns** the result in a tuple format where the first element is the value and the second element is the error.
+
+If the result is successful, the error will be `null`. If the result is a failure, the value will be `null`.
+This method is especially useful when you want to destructure the result into a tuple and use TypeScript's narrowing capabilities.
+
+#### Example
+Narrowing down the type using destructuring
+```ts
+declare const result: Result<number, ErrorA>;
+
+const [value, error] = result.toTuple();
+
+if (error) {
+  // error is ErrorA
+} else {
+  // at this point the value must be a number
+}
+```
+
 ### errorOrNull()
 
 **returns** the encapsulated error if the result is a failure, otherwise `null`.
@@ -1315,6 +1336,27 @@ class AsyncResult<Value, Error> {}
 ### isAsyncResult
 
 Utility getter that checks if the current instance is an `AsyncResult`.
+
+### toTuple()
+
+**returns** the result in a tuple format where the first element is the value and the second element is the error.
+
+If the result is successful, the error will be `null`. If the result is a failure, the value will be `null`.
+This method is especially useful when you want to destructure the result into a tuple and use TypeScript's narrowing capabilities.
+
+#### Example
+Narrowing down the type using destructuring
+```ts
+declare const result: AsyncResult<number, ErrorA>;
+
+const [value, error] = result.toTuple();
+
+if (error) {
+  // error is ErrorA
+} else {
+  // at this point the value must be a number
+}
+```
 
 ### errorOrNull()
 

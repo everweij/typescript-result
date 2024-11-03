@@ -611,6 +611,15 @@ describe("Result", () => {
 	});
 
 	describe("instance methods and getters", () => {
+		describe("$inferValue / $inferError", () => {
+			it("infers the value and error type of a result", () => {
+				const result: Result<number, ErrorA> = Result.ok(42);
+
+				expectTypeOf(result.$inferValue).toEqualTypeOf<number>();
+				expectTypeOf(result.$inferError).toEqualTypeOf<ErrorA>();
+			});
+		});
+
 		describe("value", () => {
 			it("returns the encapsulated value on success", () => {
 				const result: Result<number, ErrorA> = Result.ok(42);
@@ -720,6 +729,56 @@ describe("Result", () => {
 				if (result.isError()) {
 					expectTypeOf(result).toEqualTypeOf<Result<never, ErrorA>>();
 				}
+			});
+		});
+
+		describe("toTuple", () => {
+			it("returns a tuple on a successful result", () => {
+				const result: Result<number, ErrorA> = Result.ok(2);
+
+				const [value, error] = result.toTuple();
+				if (error) {
+					expectTypeOf(error).toEqualTypeOf<ErrorA>();
+				} else {
+					expectTypeOf(value).toEqualTypeOf<number>();
+				}
+
+				expect(value).toBe(2);
+				expect(error).toBeNull();
+			});
+
+			it("returns a tuple on a failed result", () => {
+				const result: Result<number, ErrorA> = Result.error(errorA);
+
+				const [value, error] = result.toTuple();
+				if (error) {
+					expectTypeOf(error).toEqualTypeOf<ErrorA>();
+				} else {
+					expectTypeOf(value).toEqualTypeOf<number>();
+				}
+
+				expect(value).toBeNull();
+				expect(error).toBe(errorA);
+			});
+
+			it("handles cases where the result can only be successful", () => {
+				const result = Result.ok(12);
+
+				const [value, error] = result.toTuple();
+				expectTypeOf(value).toEqualTypeOf<number>();
+				expectTypeOf(error).toEqualTypeOf<never>();
+				expect(value).toBe(12);
+				expect(error).toBe(null);
+			});
+
+			it("handles cases where the result can only be a failure", () => {
+				const result = Result.error(errorA);
+
+				const [value, error] = result.toTuple();
+				expectTypeOf(value).toEqualTypeOf<never>();
+				expectTypeOf(error).toEqualTypeOf<ErrorA>();
+				expect(value).toBe(null);
+				expect(error).toBe(errorA);
 			});
 		});
 
@@ -1605,10 +1664,69 @@ describe("AsyncResult", () => {
 	});
 
 	describe("instance methods and getters", () => {
+		describe("$inferValue / $inferError", () => {
+			it("infers the value and error type of a result", () => {
+				const result: AsyncResult<number, ErrorA> = AsyncResult.ok(42);
+
+				expectTypeOf(result.$inferValue).toEqualTypeOf<number>();
+				expectTypeOf(result.$inferError).toEqualTypeOf<ErrorA>();
+			});
+		});
+
 		describe("isAsyncResult", () => {
 			it("tests whether a value is an async-result", () => {
 				const asyncResult = AsyncResult.ok(12);
 				expect(asyncResult.isAsyncResult).toBe(true);
+			});
+		});
+
+		describe("toTuple", () => {
+			it("returns a tuple on a successful result", async () => {
+				const result: AsyncResult<number, ErrorA> = AsyncResult.ok(2);
+
+				const [value, error] = await result.toTuple();
+				if (error) {
+					expectTypeOf(error).toEqualTypeOf<ErrorA>();
+				} else {
+					expectTypeOf(value).toEqualTypeOf<number>();
+				}
+
+				expect(value).toBe(2);
+				expect(error).toBeNull();
+			});
+
+			it("returns a tuple on a failed result", async () => {
+				const result: AsyncResult<number, ErrorA> = AsyncResult.error(errorA);
+
+				const [value, error] = await result.toTuple();
+				if (error) {
+					expectTypeOf(error).toEqualTypeOf<ErrorA>();
+				} else {
+					expectTypeOf(value).toEqualTypeOf<number>();
+				}
+
+				expect(value).toBeNull();
+				expect(error).toBe(errorA);
+			});
+
+			it("handles cases where the result can only be successful", async () => {
+				const result = AsyncResult.ok(12);
+
+				const [value, error] = await result.toTuple();
+				expectTypeOf(value).toEqualTypeOf<number>();
+				expectTypeOf(error).toEqualTypeOf<never>();
+				expect(value).toBe(12);
+				expect(error).toBe(null);
+			});
+
+			it("handles cases where the result can only be a failure", async () => {
+				const result = AsyncResult.error(errorA);
+
+				const [value, error] = await result.toTuple();
+				expectTypeOf(value).toEqualTypeOf<never>();
+				expectTypeOf(error).toEqualTypeOf<ErrorA>();
+				expect(value).toBe(null);
+				expect(error).toBe(errorA);
 			});
 		});
 

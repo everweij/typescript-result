@@ -258,7 +258,7 @@ describe("Result", () => {
 			expect(result.error).toBeInstanceOf(CustomError);
 		});
 
-		it("returns an asyc-function that executes a given async-function and returns the successful outcome in a async-result", async () => {
+		it("returns an async-function that executes a given async-function and returns the successful outcome in a async-result", async () => {
 			async function sum(a: number, b: number) {
 				return a + b;
 			}
@@ -271,7 +271,7 @@ describe("Result", () => {
 			expect(result.value).toBe(3);
 		});
 
-		it("returns an asyc-function that executes a given async-function and returns the failed outcome in a async-result", async () => {
+		it("returns an async-function that executes a given async-function and returns the failed outcome in a async-result", async () => {
 			async function sum(a: number, b: number) {
 				throw new CustomError();
 
@@ -342,7 +342,7 @@ describe("Result", () => {
 			expect(result.value).toEqual(["a", "b", "c"]);
 		});
 
-		it("takes a single succesful async-result and combines it into one successful async-result", async () => {
+		it("takes a single successful async-result and combines it into one successful async-result", async () => {
 			const asyncResult = Result.try(async () => "some value");
 
 			const asyncAllResult = Result.allCatching(asyncResult);

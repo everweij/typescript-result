@@ -474,11 +474,73 @@ someOperation()
 
 ### Unwrapping a result
 
-At some point in the flow of your program, you want to retrieve the value of a successful result or the error of a failed result. There are a couple of ways to do this, depending on your use case.
+At some point in the flow of your program, you want to retrieve the value of a successful result or 
+the error of a failed result. There are a couple of ways to do this, depending on your use case.
+
+#### Using `toTuple()` to destructure the result
+
+`toTuple()` returns the result in a tuple format where the first element is the _value_ and the second element is the _error_. We can leverage TypeScript's narrowing capabilities to infer the correct type of the value or error by doing a simple conditional check:
+
+```ts
+declare const result: Result<number, IOError>;
+
+const [value, error] = result.toTuple();
+
+if (value) {
+  // at this point the value must be a number
+} else {
+  // error must be an instance of IOError
+}
+```
+
+Another approach is to return early when the result is a failure. This is a pattern common in the Go language:
+
+```ts
+const [value, error] = result.toTuple();
+
+if (error) {
+  return Result.error(error);
+}
+
+return Result.ok(value * 2);
+```
+
+Note that in this example `Result.map` would be a better fit, but it illustrates the point. A more realistic example could be the handling of a request in a web API:
+
+```ts
+function handleRoute(id: number) {
+  const [value, error] = performOperation(id).toTuple();
+
+  if (error) {
+    switch (error.type) {
+      case "not-found":
+        return {
+          status: 404,
+          body: "Not found",
+        };
+      case "unauthorized":
+        return {
+          status: 401,
+          body: "Unauthorized",
+        };
+      default:
+        return {
+          status: 500,
+          body: "Internal server error",
+        };
+    }
+  }
+
+  return {
+    status: 200,
+    body: value,
+  }
+}
+```
 
 #### Narrowing down the type using `isOk()` and `isError()`
 
-The imperative approach is to use the `isOk()` and `isError()` methods to narrow down the type of the result:
+Another imperative approach is to use the `isOk()` and `isError()` methods to narrow down the type of the result:
 
 ```ts
 if (result.isOk()) {
@@ -658,6 +720,7 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
   - Instance methods
     - [isOk()](#isok)
     - [isError()](#iserror)
+    - [toTuple()](#totuple)
     - [errorOrNull()](#errorornull)
     - [getOrNull()](#getornull)
     - [getOrDefault(defaultValue)](#getordefaultdefaultvalue)
@@ -688,6 +751,7 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
   - Properties
     - [isAsyncResult](#isasyncresult)
   - Instance methods
+    - [toTuple()](#totuple-1)
     - [errorOrNull()](#errorornull-1)
     - [getOrNull()](#getornull-1)
     - [getOrDefault(defaultValue)](#getordefaultdefaultvalue-1)

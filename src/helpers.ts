@@ -20,7 +20,7 @@ export function isAsyncFn(fn: AnyFunction): fn is AnyAsyncFunction {
 }
 
 /**
- * Utlity function to assert that a case is unreachable
+ * Utility function to assert that a case is unreachable
  * @param value the value which to check for exhaustiveness
  *
  * @example

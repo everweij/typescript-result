@@ -54,13 +54,13 @@ type AccountForFunctionThrowing<Items extends any[]> =
  */
 export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	/**
-	 * Utiltity getter to infer the value type of the result.
+	 * Utility getter to infer the value type of the result.
 	 * Note: this getter does not hold any value, it's only used for type inference.
 	 */
 	declare $inferValue: Value;
 
 	/**
-	 * Utiltity getter to infer the error type of the result.
+	 * Utility getter to infer the error type of the result.
 	 * Note: this getter does not hold any value, it's only used for type inference.
 	 */
 	declare $inferError: Err;
@@ -595,13 +595,13 @@ export class Result<Value, Err> {
 	) {}
 
 	/**
-	 * Utiltity getter to infer the value type of the result.
+	 * Utility getter to infer the value type of the result.
 	 * Note: this getter does not hold any value, it's only used for type inference.
 	 */
 	declare $inferValue: Value;
 
 	/**
-	 * Utiltity getter to infer the error type of the result.
+	 * Utility getter to infer the error type of the result.
 	 * Note: this getter does not hold any value, it's only used for type inference.
 	 */
 	declare $inferError: Err;

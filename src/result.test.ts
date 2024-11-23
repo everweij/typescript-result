@@ -219,17 +219,15 @@ describe("Result", () => {
 	describe("Result.wrap", () => {
 		it("sets the correct types", () => {
 			const wrappedSum = Result.wrap((a: number, b: number) => a + b);
-			expectTypeOf(wrappedSum).parameters.toEqualTypeOf<[number, number]>();
-			expectTypeOf(wrappedSum).returns.toEqualTypeOf<Result<number, Error>>();
+			expectTypeOf(wrappedSum).toEqualTypeOf<
+				(a: number, b: number) => Result<number, Error>
+			>();
 
 			const asyncWrappedSum = Result.wrap(
 				async (a: number, b: number) => a + b,
 			);
-			expectTypeOf(asyncWrappedSum).parameters.toEqualTypeOf<
-				[number, number]
-			>();
-			expectTypeOf(asyncWrappedSum).returns.toEqualTypeOf<
-				AsyncResult<number, Error>
+			expectTypeOf(asyncWrappedSum).toEqualTypeOf<
+				(a: number, b: number) => AsyncResult<number, Error>
 			>();
 		});
 

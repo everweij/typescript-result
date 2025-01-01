@@ -267,7 +267,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				} catch (e) {
 					reject(e);
 				}
-			}),
+			}).catch(reject),
 		);
 	}
 
@@ -313,7 +313,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				} catch (error) {
 					reject(error);
 				}
-			}),
+			}).catch(reject),
 		);
 	}
 
@@ -391,7 +391,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				} else {
 					resolve(result);
 				}
-			}),
+			}).catch(reject),
 		) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
 				? AsyncResult<ResultValue, Err | ResultError>
@@ -458,7 +458,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				} catch (error) {
 					reject(error);
 				}
-			}),
+			}).catch(reject),
 		);
 	}
 
@@ -499,7 +499,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				} catch (error) {
 					reject(error);
 				}
-			}),
+			}).catch(reject),
 		) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
 				? AsyncResult<Value | ResultValue, ResultError>
@@ -519,10 +519,10 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * if it represents a success.
 	 */
 	recoverCatching<ReturnType>(onFailure: (error: Err) => ReturnType) {
-		return new AsyncResult<any, any>((resolve) =>
+		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
 				resolve(result.recoverCatching(onFailure));
-			}),
+			}).catch(reject),
 		) as ReturnType extends Promise<infer PromiseValue>
 			? PromiseValue extends Result<infer ResultValue, infer ResultError>
 				? AsyncResult<Value | ResultValue, ResultError | NativeError>

@@ -582,6 +582,16 @@ describe("Result", () => {
 				),
 			).rejects.toBeInstanceOf(CustomError);
 		});
+
+		it("throws when exceptions are encountered in the async function returning the promise", async () => {
+			async function myFunction(): Promise<Result<number, ErrorB>> {
+				throw new CustomError("Boom!");
+			}
+
+			await expect(() =>
+				Result.fromAsync(myFunction()).map(() => 12),
+			).rejects.toThrow(CustomError);
+		});
 	});
 
 	describe("Result.fromAsyncCatching", () => {

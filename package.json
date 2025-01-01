@@ -1,7 +1,7 @@
 {
 	"private": false,
 	"name": "typescript-result",
-	"version": "3.1.0",
+	"version": "3.1.1",
 	"description": "A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable.",
 	"keywords": [
 		"result",

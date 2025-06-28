@@ -1263,6 +1263,27 @@ describe("Result", () => {
 				Result.assertError(resolvedAsyncResult);
 				expect(resolvedAsyncResult.error).toBeInstanceOf(CustomError);
 			});
+
+			it("merges a union of complex results into a single result", () => {
+				const result = Result.ok(2) as
+					| Result<number, ErrorA>
+					| Result<never, ErrorB>;
+
+				const nextResult = result.map((value) =>
+					value === 2 ? Result.ok(value * 2) : Result.error(new CustomError()),
+				);
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					Result<number, CustomError | ErrorA | ErrorB>
+				>();
+
+				expectTypeOf(nextResult).not.toEqualTypeOf<
+					| Result<number, ErrorA>
+					| Result<never, CustomError | ErrorA>
+					| Result<number, ErrorB>
+					| Result<never, CustomError | ErrorB>
+				>();
+			});
 		});
 
 		describe("mapCatching", () => {
@@ -1353,6 +1374,28 @@ describe("Result", () => {
 				Result.assertError(result);
 
 				expect(result.error).toBeInstanceOf(ErrorB);
+			});
+
+			it("merges a union of complex results into a single result", () => {
+				const result = Result.ok(2) as
+					| Result<number, ErrorA>
+					| Result<never, ErrorB>;
+
+				const nextResult = result.mapCatching(
+					(value) => value,
+					() => new CustomError(),
+				);
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					Result<number, CustomError | ErrorA | ErrorB>
+				>();
+
+				expectTypeOf(nextResult).not.toEqualTypeOf<
+					| Result<number, ErrorA>
+					| Result<never, CustomError | ErrorA>
+					| Result<number, ErrorB>
+					| Result<never, CustomError | ErrorB>
+				>();
 			});
 		});
 

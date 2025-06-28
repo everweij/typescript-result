@@ -103,7 +103,9 @@ describe("User management app", () => {
 
 		createUser(name: string, email: string) {
 			return Result.fromAsync(this.userRepository.existsByEmail(email))
-				.map((exists) => exists && Result.error(new EmailAlreadyExistsError()))
+				.map((exists) =>
+					exists ? Result.error(new EmailAlreadyExistsError()) : Result.ok(),
+				)
 				.map(() => User.create(name, email))
 				.onSuccess((user) => this.userRepository.save(user))
 				.map(UserDto.fromUser);
@@ -126,10 +128,10 @@ describe("User management app", () => {
 				(error) => {
 					switch (error.type) {
 						case "validation-error":
-							return { status: 400, data: { message: error.message } };
+							return { status: 400 as const, data: { message: error.message } };
 						case "email-already-exists-error":
 							return {
-								status: 400,
+								status: 409 as const,
 								data: { message: "account with same email already exists" },
 							};
 						default:
@@ -197,7 +199,7 @@ describe("User management app", () => {
 
 		const secondUserOutcome = await app.createUser("John", "info@john.com");
 		expect(secondUserOutcome).toEqual({
-			status: 400,
+			status: 409,
 			data: { message: "account with same email already exists" },
 		});
 	});

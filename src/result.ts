@@ -51,31 +51,10 @@ type ReturningError<T> =
 type ExtractValue<T> = T extends ReturningValue<infer Value> ? Value : never;
 type ExtractError<T> = T extends ReturningError<infer Error> ? Error : never;
 
-// type X1 = Result<number, Error> extends ExtractValue<infer V> ? V : never;
-// type X2 = AsyncResult<number, Error> extends ExtractValue<infer V>
-// 	? V
-// 	: never;
-// type X3 = Promise<number> extends ExtractValue<infer V> ? V : never;
-// type X4 = number extends ExtractValue<infer V> ? V : never;
-// type X5 = Promise<Result<number, Error>> extends ExtractValue<infer V>
-// 	? V
-// 	: never;
-
-// type X6 = Result<number, Error> extends ExtractError<infer E> ? E : never
-// type X7 = AsyncResult<number, Error> extends ExtractError<infer E> ? E : never
-// type X8 = Promise<Result<number, Error>> extends ExtractError<infer E> ? E : never
-// type X9 = Promise<AsyncResult<number, Error>> extends ExtractError<infer E> ? E : never
-// type X10 = number extends ExtractError<infer E> ? E : never
-
-type MergeAsyncResult<T> = T extends AsyncResult<infer Value, infer Err>
-	? AsyncResult<Value, Err>
-	: never;
-
-type MergeResult<T> = T extends Result<infer Value, infer Err>
-	? Result<Value, Err>
-	: never;
-
-type IfAsync<T, Yes, No> = Contains<T, AnyAsyncResult | AnyPromise> extends true
+type IfReturnsAsync<T, Yes, No> = Contains<
+	T,
+	AnyAsyncResult | AnyPromise
+> extends true
 	? Yes
 	: No;
 
@@ -425,10 +404,12 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 	 * ```
 	 */
-	map<This extends AnyAsyncResult, ReturnType, U = ReturnType>(
-		this: This,
-		transform: (value: InferValue<This>) => ReturnType,
-	) {
+	map<
+		This extends AnyAsyncResult,
+		ReturnType,
+		U = ReturnType,
+		V = Awaited<ReturnType>,
+	>(this: This, transform: (value: InferValue<This>) => ReturnType) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
 				if (result.isOk()) {
@@ -456,11 +437,13 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 					resolve(result);
 				}
 			}).catch(reject),
-		) as MergeAsyncResult<
-			ReturnType extends U
-				? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<ExtractValue<V>, InferError<This> | ExtractError<V>>
 				: never
-		>;
+			: ReturnType extends U
+				? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
+				: never;
 	}
 
 	/**
@@ -477,6 +460,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 		ReturnType,
 		ErrorType = NativeError,
 		U = ReturnType,
+		V = Awaited<ReturnType>,
 	>(
 		this: This,
 		transformValue: (value: InferValue<This>) => ReturnType,
@@ -494,14 +478,19 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 						reject(err);
 					}
 				});
-		}) as MergeAsyncResult<
-			ReturnType extends U
+		}) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<
+						ExtractValue<V>,
+						InferError<This> | ExtractError<V> | ErrorType
+					>
+				: never
+			: ReturnType extends U
 				? AsyncResult<
 						ExtractValue<U>,
 						InferError<This> | ExtractError<U> | ErrorType
 					>
-				: never
-		>;
+				: never;
 	}
 
 	/**
@@ -562,10 +551,12 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * persistInDB(item).recover(() => persistLocally(item)); // AsyncResult<Item, IOError>
 	 * ```
 	 */
-	recover<This extends AnyAsyncResult, ReturnType, U = ReturnType>(
-		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
-	) {
+	recover<
+		This extends AnyAsyncResult,
+		ReturnType,
+		U = ReturnType,
+		V = Awaited<ReturnType>,
+	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
 		return new AsyncResult((resolve, reject) =>
 			this.then(async (result) => {
 				try {
@@ -575,11 +566,13 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 					reject(error);
 				}
 			}).catch(reject),
-		) as MergeAsyncResult<
-			ReturnType extends U
-				? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<InferValue<This> | ExtractValue<V>, ExtractError<V>>
 				: never
-		>;
+			: ReturnType extends U
+				? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+				: never;
 	}
 
 	/**
@@ -591,22 +584,29 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
 	 * if it represents a success.
 	 */
-	recoverCatching<This extends AnyAsyncResult, ReturnType, U = ReturnType>(
-		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
-	) {
+	recoverCatching<
+		This extends AnyAsyncResult,
+		ReturnType,
+		U = ReturnType,
+		V = Awaited<ReturnType>,
+	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
 				resolve(result.recoverCatching(onFailure));
 			}).catch(reject),
-		) as MergeAsyncResult<
-			ReturnType extends U
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<
+						InferValue<This> | ExtractValue<V>,
+						ExtractError<V> | NativeError
+					>
+				: never
+			: ReturnType extends U
 				? AsyncResult<
 						InferValue<This> | ExtractValue<U>,
 						ExtractError<U> | NativeError
 					>
-				: never
-		>;
+				: never;
 	}
 
 	/**
@@ -1117,29 +1117,31 @@ export class Result<Value, Err> {
 	 * const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 	 * ```
 	 */
-	map<This extends AnyResult, ReturnType, U = ReturnType>(
-		this: This,
-		transform: (value: InferValue<This>) => ReturnType,
-	) {
+	map<
+		This extends AnyResult,
+		ReturnType,
+		U = ReturnType,
+		V = Awaited<ReturnType>,
+	>(this: This, transform: (value: InferValue<This>) => ReturnType) {
 		return (
 			this.success
 				? Result.run(() => transform(this._value))
 				: isAsyncFn(transform)
 					? AsyncResult.error(this._error)
 					: this
-		) as IfAsync<
-			ReturnType,
-			MergeAsyncResult<
-				ReturnType extends U
-					? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-					: never
-			>,
-			MergeResult<
-				ReturnType extends U
-					? Result<ExtractValue<U>, InferError<This> | ExtractError<U>>
-					: never
-			>
-		>;
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<ExtractValue<V>, InferError<This> | ExtractError<V>>
+				: never
+			: IfReturnsAsync<
+					ReturnType,
+					ReturnType extends U
+						? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
+						: never,
+					ReturnType extends U
+						? Result<ExtractValue<U>, InferError<This> | ExtractError<U>>
+						: never
+				>;
 	}
 
 	/**
@@ -1157,6 +1159,7 @@ export class Result<Value, Err> {
 		ReturnType,
 		ErrorType = NativeError,
 		U = ReturnType,
+		V = Awaited<ReturnType>,
 	>(
 		this: This,
 		transformValue: (value: InferValue<This>) => ReturnType,
@@ -1169,25 +1172,28 @@ export class Result<Value, Err> {
 						transformError as AnyFunction,
 					)
 				: this
-		) as IfAsync<
-			ReturnType,
-			MergeAsyncResult<
-				ReturnType extends U
-					? AsyncResult<
-							ExtractValue<U>,
-							InferError<This> | ExtractError<U> | ErrorType
-						>
-					: never
-			>,
-			MergeResult<
-				ReturnType extends U
-					? Result<
-							ExtractValue<U>,
-							InferError<This> | ExtractError<U> | ErrorType
-						>
-					: never
-			>
-		>;
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<
+						ExtractValue<V>,
+						InferError<This> | ExtractError<V> | ErrorType
+					>
+				: never
+			: IfReturnsAsync<
+					ReturnType,
+					ReturnType extends U
+						? AsyncResult<
+								ExtractValue<U>,
+								InferError<This> | ExtractError<U> | ErrorType
+							>
+						: never,
+					ReturnType extends U
+						? Result<
+								ExtractValue<U>,
+								InferError<This> | ExtractError<U> | ErrorType
+							>
+						: never
+				>;
 	}
 
 	/**
@@ -1243,29 +1249,31 @@ export class Result<Value, Err> {
 	 * persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
 	 * ```
 	 */
-	recover<This extends AnyResult, ReturnType, U = ReturnType>(
-		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
-	) {
+	recover<
+		This extends AnyResult,
+		ReturnType,
+		U = ReturnType,
+		V = Awaited<ReturnType>,
+	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
 		return (
 			this.success
 				? isAsyncFn(onFailure)
 					? AsyncResult.ok(this._value)
 					: this
 				: Result.run(() => onFailure(this._error))
-		) as IfAsync<
-			ReturnType,
-			MergeAsyncResult<
-				ReturnType extends U
-					? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-					: never
-			>,
-			MergeResult<
-				ReturnType extends U
-					? Result<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-					: never
-			>
-		>;
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<InferValue<This> | ExtractValue<V>, ExtractError<V>>
+				: never
+			: IfReturnsAsync<
+					ReturnType,
+					ReturnType extends U
+						? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+						: never,
+					ReturnType extends U
+						? Result<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+						: never
+				>;
 	}
 
 	/**
@@ -1277,35 +1285,40 @@ export class Result<Value, Err> {
 	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
 	 * when the result represents a failure, or the original instance if it represents a success.
 	 */
-	recoverCatching<This extends AnyResult, ReturnType, U = ReturnType>(
-		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
-	) {
+	recoverCatching<
+		This extends AnyResult,
+		ReturnType,
+		U = ReturnType,
+		V = Awaited<ReturnType>,
+	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
 		return (
 			this.success
 				? isAsyncFn(onFailure)
 					? AsyncResult.ok(this._value)
 					: this
 				: Result.try(() => onFailure(this._error))
-		) as IfAsync<
-			ReturnType,
-			MergeAsyncResult<
-				ReturnType extends U
-					? AsyncResult<
-							InferValue<This> | ExtractValue<U>,
-							ExtractError<U> | NativeError
-						>
-					: never
-			>,
-			MergeResult<
-				ReturnType extends U
-					? Result<
-							InferValue<This> | ExtractValue<U>,
-							ExtractError<U> | NativeError
-						>
-					: never
-			>
-		>;
+		) as [ReturnType] extends [Promise<infer PValue>]
+			? PValue extends V
+				? AsyncResult<
+						InferValue<This> | ExtractValue<V>,
+						ExtractError<V> | NativeError
+					>
+				: never
+			: IfReturnsAsync<
+					ReturnType,
+					ReturnType extends U
+						? AsyncResult<
+								InferValue<This> | ExtractValue<U>,
+								ExtractError<U> | NativeError
+							>
+						: never,
+					ReturnType extends U
+						? Result<
+								InferValue<This> | ExtractValue<U>,
+								ExtractError<U> | NativeError
+							>
+						: never
+				>;
 	}
 
 	/**

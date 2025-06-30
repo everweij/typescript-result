@@ -1310,7 +1310,7 @@ describe("Result", () => {
 			});
 
 			it("resolves the correct type when the returned value is a union of result-like and regular values", async () => {
-				function run(value: number) {
+				function runSync(value: number) {
 					return Result.ok(value).map((value) => {
 						if (value === 1) {
 							return "one";
@@ -1324,11 +1324,31 @@ describe("Result", () => {
 					});
 				}
 
-				expectTypeOf(run(1)).toEqualTypeOf<Result<"one" | "two", ErrorB>>();
+				expectTypeOf(runSync(1)).toEqualTypeOf<Result<"one" | "two", ErrorB>>();
+				expect(runSync(1)).toEqual(Result.ok("one"));
+				expect(runSync(2)).toEqual(Result.ok("two"));
+				expect(runSync(3)).toEqual(Result.error(new ErrorB()));
 
-				expect(run(1)).toEqual(Result.ok("one"));
-				expect(run(2)).toEqual(Result.ok("two"));
-				expect(run(3)).toEqual(Result.error(new ErrorB()));
+				function runAsync(value: number) {
+					return Result.ok(value).map(async (value) => {
+						if (value === 1) {
+							return "one";
+						}
+
+						if (value === 2) {
+							return Result.ok("two" as const);
+						}
+
+						return Result.error(new ErrorB());
+					});
+				}
+
+				expectTypeOf(runAsync(1)).toEqualTypeOf<
+					AsyncResult<"one" | "two", ErrorB>
+				>();
+				expect(await runAsync(1)).toEqual(Result.ok("one"));
+				expect(await runAsync(2)).toEqual(Result.ok("two"));
+				expect(await runAsync(3)).toEqual(Result.error(new ErrorB()));
 			});
 		});
 

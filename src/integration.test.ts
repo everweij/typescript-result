@@ -82,15 +82,17 @@ describe("User management app", () => {
 			this.users[user.id] = user;
 		}
 
-		async findById(id: number) {
-			const possibleUser = this.users[id];
-			if (!possibleUser) {
-				return Result.error(
-					new NotFoundError(`Cannot find user with id ${id}`),
-				);
-			}
+		findById(id: number) {
+			return Result.fromAsync(async () => {
+				const possibleUser = this.users[id];
+				if (!possibleUser) {
+					return Result.error(
+						new NotFoundError(`Cannot find user with id ${id}`),
+					);
+				}
 
-			return Result.ok(possibleUser);
+				return Result.ok(possibleUser);
+			});
 		}
 
 		async existsByEmail(email: string) {
@@ -112,7 +114,8 @@ describe("User management app", () => {
 		}
 
 		updateUserEmail(id: number, email: string) {
-			return Result.fromAsync(this.userRepository.findById(id))
+			return this.userRepository
+				.findById(id)
 				.map((user) => user.updateEmail(email))
 				.onSuccess((user) => this.userRepository.save(user))
 				.map(UserDto.fromUser);

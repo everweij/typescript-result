@@ -592,6 +592,55 @@ describe("Result", () => {
 				Result.fromAsync(myFunction()).map(() => 12),
 			).rejects.toThrow(CustomError);
 		});
+
+		it("takes an async function and turns it into an async-result", async () => {
+			const result = Result.fromAsync(async () => {
+				await sleep();
+				return Result.ok(12);
+			});
+
+			expect(result).toBeInstanceOf(AsyncResult);
+			expectTypeOf(result).toEqualTypeOf<AsyncResult<number, never>>();
+			expect(await result).toEqual(Result.ok(12));
+		});
+
+		it("takes an async function that possibly returns multiple types", async () => {
+			const exec = (value: number) =>
+				Result.fromAsync(async () => {
+					if (value === 1) {
+						return "one" as const;
+					}
+
+					if (value === 2) {
+						return Result.ok("two" as const);
+					}
+
+					if (value === 3) {
+						return AsyncResult.ok("three" as const);
+					}
+
+					if (value === 4) {
+						return Promise.resolve("four" as const);
+					}
+
+					if (value === 5) {
+						return Result.error(new ErrorA("five"));
+					}
+
+					return Promise.resolve(Result.error(new ErrorB()));
+				});
+
+			expectTypeOf(exec).returns.toEqualTypeOf<
+				AsyncResult<"one" | "two" | "three" | "four", ErrorA | ErrorB>
+			>();
+
+			expect(await exec(1)).toEqual(Result.ok("one"));
+			expect(await exec(2)).toEqual(Result.ok("two"));
+			expect(await exec(3)).toEqual(Result.ok("three"));
+			expect(await exec(4)).toEqual(Result.ok("four"));
+			expect(await exec(5)).toEqual(Result.error(new ErrorA("five")));
+			expect(await exec(6)).toEqual(Result.error(new ErrorB()));
+		});
 	});
 
 	describe("Result.fromAsyncCatching", () => {
@@ -617,6 +666,57 @@ describe("Result", () => {
 			const resolvedAsyncResult = await asyncResult;
 			Result.assertError(resolvedAsyncResult);
 			expect(resolvedAsyncResult.error).toBeInstanceOf(CustomError);
+		});
+
+		it("takes an async function that possibly returns multiple types", async () => {
+			const exec = (value: number) =>
+				Result.fromAsyncCatching(async () => {
+					if (value === 1) {
+						return "one" as const;
+					}
+
+					if (value === 2) {
+						return Result.ok("two" as const);
+					}
+
+					if (value === 3) {
+						return AsyncResult.ok("three" as const);
+					}
+
+					if (value === 4) {
+						return Promise.resolve("four" as const);
+					}
+
+					if (value === 5) {
+						return Result.error(new ErrorA("five"));
+					}
+
+					return Promise.resolve(Result.error(new ErrorB()));
+				});
+
+			expectTypeOf(exec).returns.toEqualTypeOf<
+				AsyncResult<"one" | "two" | "three" | "four", ErrorA | ErrorB | Error>
+			>();
+
+			expect(await exec(1)).toEqual(Result.ok("one"));
+			expect(await exec(2)).toEqual(Result.ok("two"));
+			expect(await exec(3)).toEqual(Result.ok("three"));
+			expect(await exec(4)).toEqual(Result.ok("four"));
+			expect(await exec(5)).toEqual(Result.error(new ErrorA("five")));
+			expect(await exec(6)).toEqual(Result.error(new ErrorB()));
+		});
+
+		it("catches thrown exceptions inside the callback correctly", async () => {
+			const asyncResult = Result.fromAsyncCatching(async () => {
+				throw new CustomError("Boom!");
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<never, Error>>();
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+
+			const result = await asyncResult;
+			Result.assertError(result);
+			expect(result.error).toBeInstanceOf(CustomError);
 		});
 	});
 

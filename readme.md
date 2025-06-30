@@ -685,16 +685,76 @@ See [Async support](#async-support) for more context.
 
 Because it can be quite cumbersome to work with results that are wrapped in a promise, we provide an `AsyncResult` type that is essentially a regular promise that contains a `Result` type, along with most of the methods that are available on the regular `Result` type. This makes it easier to chain operations without having to assign the intermediate results to a variable or having to use `await` for each async operation.
 
-There are of course plenty of scenarios where an async function returns a `Result` (`Promise<Result<*, *>>`). In these cases, you can use the `fromAsync` and `fromAsyncCatching` methods to convert the promise to an `AsyncResult`, and continue chaining operations:
+There are of course plenty of scenarios where an async function (or method) returns a `Result` (`Promise<Result<*, *>>`). Although there nothing wrong with this per se, it can become a bit cumbersome to await each function call before you can perform any operations. You can use the `fromAsync` and `fromAsyncCatching` utility methods to make working with results in an async context more ergonomic and developer-friendly.
 
+There are two approaches you can choose from: transform to an `AsyncResult` _directly at the source_, or let the _consuming code_ handle the conversion. Let's look at both approaches in more detail.
+
+#### Transforming to an `AsyncResult` directly at the source
+
+Before:
 ```ts
-async function someAsyncOperation(): Promise<Result<number, Error>> {
-  return Result.ok(42);
+// Note the `async` keyword and that we return a `Promise` holding a `Result`
+async function findUserById(id: string): Promise<Result<User, NotFoundError>> {
+  const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
+
+  if (!user) {
+    return Result.error(new NotFoundError("User not found"));
+  }
+
+  return Result.ok(user);
 }
 
-const result = await Result.fromAsync(someAsyncOperation())
-  .map((value) => value * 2)
-  // etc...
+async function getDisplayName(userId: string): Promise<string> {
+  return (await findUserById(userId))
+    .map((user) => user.name)
+    .getOrElse(() => "Unknown User");
+}
+```
+
+After:
+```ts
+// Note that we no longer use the `async` keyword and that we return an `AsyncResult`
+// instead of a `Promise`
+function findUserById(id: string): AsyncResult<User, NotFoundError> {
+  return Result.fromAsync(async () => {
+    const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
+
+    if (!user) {
+      return Result.error(new NotFoundError("User not found"));
+    }
+    return Result.ok(user);
+  });
+}
+
+function getDisplayName(userId: string): Promise<string> {
+  return findUserById(userId)
+    .map((user) => user.name)
+    .getOrElse(() => "Unknown User");
+}
+```
+
+The difference might be subtle, but if your codebase has a lot of async operations it might be worth considering this approach.
+
+#### Let the consuming code handle the conversion
+
+You can also choose to do the conversion from the consuming code. The previous example with this approach would translate to this:
+
+```ts
+async function findUserById(id: string): Promise<Result<User, NotFoundError>> {
+  const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
+
+  if (!user) {
+    return Result.error(new NotFoundError("User not found"));
+  }
+
+  return Result.ok(user);
+}
+
+async function getDisplayName(userId: string): Promise<string> {
+  return Result.fromAsync(findUserById(userId))
+    .map((user) => user.name)
+    .getOrElse(() => "Unknown User");
+}
 ```
 
 ### Merging or combining results
@@ -743,8 +803,8 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
     - [Result.allCatching(items)](#resultallcatchingitems)
     - [Result.wrap(fn)](#resultwrapfn)
     - [Result.try(fn, [transform])](#resulttryfn-transform)
-    - [Result.fromAsync(promise)](#resultfromasyncpromise)
-    - [Result.fromAsyncCatching(promise)](#resultfromasynccatchingpromise)
+    - [Result.fromAsync()](#resultfromasync)
+    - [Result.fromAsyncCatching()](#resultfromasynccatching)
     - [Result.assertOk(result)](#resultassertokresult)
     - [Result.assertError(result)](#resultasserterrorresult)
 - [AsyncResult](#asyncresult)
@@ -1336,15 +1396,19 @@ const result = Result.try(
 ); // Result<void, IOError>
 ```
 
-### Result.fromAsync(promise)
+### Result.fromAsync()
 
-Utility method to transform a Promise, that holds a literal value or
-a [`Result`](#result) or [`AsyncResult`](#asyncresult) instance, into an [`AsyncResult`](#asyncresult) instance. Useful when you want to immediately chain operations
+Utility method to:
+- transform a Promise, that holds a literal value or
+a [`Result`](#result) or [`AsyncResult`](#asyncresult) instance; or,
+- transform an async function
+into an [`AsyncResult`](#asyncresult) instance. Useful when you want to immediately chain operations
 after calling an async function.
 
 #### Parameters
 
-- `promise` a Promise that holds a literal value or a [`Result`](#result) or [`AsyncResult`](#asyncresult) instance.
+- `promise` a Promise that holds a literal value or a [`Result`](#result) or [`AsyncResult`](#asyncresult) instance. or,
+- `fn` an async callback funtion returning a literal value or a [`Result`](#result) or [`AsyncResult`](#asyncresult) instance.
 
 **returns** a new [`AsyncResult`](#asyncresult) instance.
 
@@ -1366,9 +1430,9 @@ const result = (await someAsyncOperation()).map((value) => value 2); // Result<n
 const asyncResult = Result.fromAsync(someAsyncOperation()).map((value) => value 2); // AsyncResult<number, Error>
 ```
 
-### Result.fromAsyncCatching(promise)
+### Result.fromAsyncCatching()
 
-Similar to [`Result.fromAsync`](#resultfromasyncpromise) this method transforms a Promise into an [`AsyncResult`](#asyncresult) instance.
+Similar to [`Result.fromAsync`](#resultfromasync) this method transforms a Promise or async callback function into an [`AsyncResult`](#asyncresult) instance.
 In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
 
 ### Result.assertOk(result)

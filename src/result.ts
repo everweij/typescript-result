@@ -1666,6 +1666,41 @@ export class Result<Value, Err> {
 	}
 
 	/**
+	 * Utility method to transform an async function to an {@linkcode AsyncResult} instance. Useful when you want to
+	 * immediately chain operations after calling an async function/method that returns a Result.
+	 *
+	 * @param fn the async callback function that returns a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance.
+	 *
+	 * @returns a new {@linkcode AsyncResult} instance.
+	 *
+	 * > [!NOTE]
+	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example
+	 * basic usage
+	 *
+	 * ```ts
+	 * function findUserById(id: string) {
+	 *   return Result.fromAsync(async () => {
+	 *     const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
+	 *
+	 *     if (!user) {
+	 *       return Result.error(new NotFoundError("User not found"));
+	 *     }
+	 *
+	 *     return Result.ok(user);
+	 *   });
+	 * }
+	 *
+	 * const displayName = await findUserById("123").fold((user) => user.name, () => "Unknown User");
+	 * ```
+	 */
+	static fromAsync<T>(
+		fn: () => Promise<T>,
+	): AsyncResult<ExtractValue<T>, ExtractError<T>>;
+	/**
 	 * Utility method to transform a Promise, that holds a literal value or
 	 * a {@linkcode Result} or {@linkcode AsyncResult} instance, into an {@linkcode AsyncResult} instance. Useful when you want to immediately chain operations
 	 * after calling an async function.
@@ -1692,40 +1727,33 @@ export class Result<Value, Err> {
 	 * const asyncResult = Result.fromAsync(someAsyncOperation()).map((value) => value * 2); // AsyncResult<number, Error>
 	 * ```
 	 */
-	static fromAsync<T extends Promise<AnyAsyncResult>>(
-		value: T,
-	): T extends Promise<AsyncResult<infer V, infer E>>
-		? AsyncResult<V, E>
-		: never;
-	static fromAsync<T extends Promise<AnyResult>>(
-		value: T,
-	): T extends Promise<Result<infer V, infer E>> ? AsyncResult<V, E> : never;
-	static fromAsync<T extends AnyPromise>(
-		value: T,
-	): T extends Promise<infer V> ? AsyncResult<V, never> : never;
-	static fromAsync(value: unknown): unknown {
-		return Result.run(() => value);
+	static fromAsync<T>(
+		value: Promise<T>,
+	): AsyncResult<ExtractValue<T>, ExtractError<T>>;
+	static fromAsync(valueOrFn: AnyPromise | AnyAsyncFunction) {
+		return Result.run(
+			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
+		);
 	}
 
+	/**
+	 * Similar to {@linkcode Result.fromAsync} this method transforms an async callback function into an {@linkcode AsyncResult} instance.
+	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
+	 */
+	static fromAsyncCatching<T>(
+		fn: () => Promise<T>,
+	): AsyncResult<ExtractValue<T>, ExtractError<T> | NativeError>;
 	/**
 	 * Similar to {@linkcode Result.fromAsync} this method transforms a Promise into an {@linkcode AsyncResult} instance.
 	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
 	 */
-	static fromAsyncCatching<T extends Promise<AnyAsyncResult>>(
-		value: T,
-	): T extends Promise<AsyncResult<infer V, infer E>>
-		? AsyncResult<V, E | NativeError>
-		: never;
-	static fromAsyncCatching<T extends Promise<AnyResult>>(
-		value: T,
-	): T extends Promise<Result<infer V, infer E>>
-		? AsyncResult<V, E | NativeError>
-		: never;
-	static fromAsyncCatching<T extends AnyPromise>(
-		value: T,
-	): T extends Promise<infer V> ? AsyncResult<V, NativeError> : never;
-	static fromAsyncCatching(value: unknown): unknown {
-		return Result.try(() => value);
+	static fromAsyncCatching<T>(
+		value: Promise<T>,
+	): AsyncResult<ExtractValue<T>, ExtractError<T> | NativeError>;
+	static fromAsyncCatching(valueOrFn: AnyPromise | AnyAsyncFunction) {
+		return Result.try(
+			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
+		);
 	}
 
 	/**

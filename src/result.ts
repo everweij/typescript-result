@@ -1048,6 +1048,7 @@ export class Result<Value, Err> {
 		action: (value: InferValue<This>) => Promise<void>,
 	): AsyncResult<InferValue<This>, InferError<This>>;
 	onSuccess<This extends AnyResult>(
+		this: This,
 		action: (value: InferValue<This>) => void,
 	): Result<InferValue<This>, InferError<This>>;
 	onSuccess(action: (value: Value) => unknown): unknown {

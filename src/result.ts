@@ -77,6 +77,21 @@ type AccountForFunctionThrowing<Items extends any[]> =
 			? NativeError
 			: never;
 
+export namespace Result {
+	export type Error<E> = Result<never, E>;
+	export type Ok<V> = Result<V, never>;
+	export type InferError<T> = T extends AsyncResult<any, infer Error>
+		? Error
+		: T extends Result<any, infer Error>
+			? Error
+			: never;
+	export type InferValue<T> = T extends AsyncResult<infer Value, any>
+		? Value
+		: T extends Result<infer Value, any>
+			? Value
+			: T;
+}
+
 /**
  * Represents the asynchronous outcome of an operation that can either succeed or fail.
  */
@@ -404,12 +419,10 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 	 * ```
 	 */
-	map<
-		This extends AnyAsyncResult,
-		ReturnType,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
-	>(this: This, transform: (value: InferValue<This>) => ReturnType) {
+	map<This extends AnyAsyncResult, ReturnType, U = Awaited<ReturnType>>(
+		this: This,
+		transform: (value: InferValue<This>) => ReturnType,
+	) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
 				if (result.isOk()) {
@@ -438,8 +451,8 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				}
 			}).catch(reject),
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
-				? AsyncResult<ExtractValue<V>, InferError<This> | ExtractError<V>>
+			? PValue extends U
+				? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
 				: never
 			: ReturnType extends U
 				? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
@@ -459,8 +472,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 		This extends AnyAsyncResult,
 		ReturnType,
 		ErrorType = NativeError,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
+		U = Awaited<ReturnType>,
 	>(
 		this: This,
 		transformValue: (value: InferValue<This>) => ReturnType,
@@ -479,10 +491,10 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 					}
 				});
 		}) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
+			? PValue extends U
 				? AsyncResult<
-						ExtractValue<V>,
-						InferError<This> | ExtractError<V> | ErrorType
+						ExtractValue<U>,
+						InferError<This> | ExtractError<U> | ErrorType
 					>
 				: never
 			: ReturnType extends U
@@ -551,12 +563,10 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * persistInDB(item).recover(() => persistLocally(item)); // AsyncResult<Item, IOError>
 	 * ```
 	 */
-	recover<
-		This extends AnyAsyncResult,
-		ReturnType,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
-	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
+	recover<This extends AnyAsyncResult, ReturnType, U = Awaited<ReturnType>>(
+		this: This,
+		onFailure: (error: InferError<This>) => ReturnType,
+	) {
 		return new AsyncResult((resolve, reject) =>
 			this.then(async (result) => {
 				try {
@@ -567,8 +577,8 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				}
 			}).catch(reject),
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
-				? AsyncResult<InferValue<This> | ExtractValue<V>, ExtractError<V>>
+			? PValue extends U
+				? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
 				: never
 			: ReturnType extends U
 				? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
@@ -587,18 +597,17 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	recoverCatching<
 		This extends AnyAsyncResult,
 		ReturnType,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
+		U = Awaited<ReturnType>,
 	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
 				resolve(result.recoverCatching(onFailure));
 			}).catch(reject),
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
+			? PValue extends U
 				? AsyncResult<
-						InferValue<This> | ExtractValue<V>,
-						ExtractError<V> | NativeError
+						InferValue<This> | ExtractValue<U>,
+						ExtractError<U> | NativeError
 					>
 				: never
 			: ReturnType extends U
@@ -1118,12 +1127,10 @@ export class Result<Value, Err> {
 	 * const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 	 * ```
 	 */
-	map<
-		This extends AnyResult,
-		ReturnType,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
-	>(this: This, transform: (value: InferValue<This>) => ReturnType) {
+	map<This extends AnyResult, ReturnType, U = Awaited<ReturnType>>(
+		this: This,
+		transform: (value: InferValue<This>) => ReturnType,
+	) {
 		return (
 			this.success
 				? Result.run(() => transform(this._value))
@@ -1131,8 +1138,8 @@ export class Result<Value, Err> {
 					? AsyncResult.error(this._error)
 					: this
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
-				? AsyncResult<ExtractValue<V>, InferError<This> | ExtractError<V>>
+			? PValue extends U
+				? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
 				: never
 			: IfReturnsAsync<
 					ReturnType,
@@ -1159,8 +1166,7 @@ export class Result<Value, Err> {
 		This extends AnyResult,
 		ReturnType,
 		ErrorType = NativeError,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
+		U = Awaited<ReturnType>,
 	>(
 		this: This,
 		transformValue: (value: InferValue<This>) => ReturnType,
@@ -1174,10 +1180,10 @@ export class Result<Value, Err> {
 					)
 				: this
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
+			? PValue extends U
 				? AsyncResult<
-						ExtractValue<V>,
-						InferError<This> | ExtractError<V> | ErrorType
+						ExtractValue<U>,
+						InferError<This> | ExtractError<U> | ErrorType
 					>
 				: never
 			: IfReturnsAsync<
@@ -1250,12 +1256,10 @@ export class Result<Value, Err> {
 	 * persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
 	 * ```
 	 */
-	recover<
-		This extends AnyResult,
-		ReturnType,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
-	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
+	recover<This extends AnyResult, ReturnType, U = Awaited<ReturnType>>(
+		this: This,
+		onFailure: (error: InferError<This>) => ReturnType,
+	) {
 		return (
 			this.success
 				? isAsyncFn(onFailure)
@@ -1263,8 +1267,8 @@ export class Result<Value, Err> {
 					: this
 				: Result.run(() => onFailure(this._error))
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
-				? AsyncResult<InferValue<This> | ExtractValue<V>, ExtractError<V>>
+			? PValue extends U
+				? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
 				: never
 			: IfReturnsAsync<
 					ReturnType,
@@ -1286,12 +1290,10 @@ export class Result<Value, Err> {
 	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
 	 * when the result represents a failure, or the original instance if it represents a success.
 	 */
-	recoverCatching<
-		This extends AnyResult,
-		ReturnType,
-		U = ReturnType,
-		V = Awaited<ReturnType>,
-	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
+	recoverCatching<This extends AnyResult, ReturnType, U = Awaited<ReturnType>>(
+		this: This,
+		onFailure: (error: InferError<This>) => ReturnType,
+	) {
 		return (
 			this.success
 				? isAsyncFn(onFailure)
@@ -1299,10 +1301,10 @@ export class Result<Value, Err> {
 					: this
 				: Result.try(() => onFailure(this._error))
 		) as [ReturnType] extends [Promise<infer PValue>]
-			? PValue extends V
+			? PValue extends U
 				? AsyncResult<
-						InferValue<This> | ExtractValue<V>,
-						ExtractError<V> | NativeError
+						InferValue<This> | ExtractValue<U>,
+						ExtractError<U> | NativeError
 					>
 				: never
 			: IfReturnsAsync<
@@ -1344,8 +1346,8 @@ export class Result<Value, Err> {
 	 * const result = Result.ok(42); // Result<number, never>
 	 * ```
 	 */
-	static ok(): Result<void, never>;
-	static ok<Value>(value: Value): Result<Value, never>;
+	static ok(): Result.Ok<void>;
+	static ok<Value>(value: Value): Result.Ok<Value>;
 	static ok(value?: unknown) {
 		return new Result(value, undefined);
 	}
@@ -1361,7 +1363,7 @@ export class Result<Value, Err> {
 	 * const result = Result.error(new NotFoundError()); // Result<never, NotFoundError>
 	 * ```
 	 */
-	static error<Error>(error: Error): Result<never, Error> {
+	static error<Error>(error: Error): Result.Error<Error> {
 		return new Result(undefined as never, error);
 	}
 

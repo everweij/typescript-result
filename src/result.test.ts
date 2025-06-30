@@ -1284,6 +1284,52 @@ describe("Result", () => {
 					| Result<never, CustomError | ErrorB>
 				>();
 			});
+
+			it("resolves the correct type when the returned value is a union of result and async-result", async () => {
+				const result = Result.ok(2) as Result<number, ErrorA>;
+
+				const nextResult = result
+					.map((value) =>
+						value > 2
+							? Result.error(new ErrorB())
+							: Result.fromAsync(Promise.resolve("some value")),
+					)
+					.map((value) => {
+						expectTypeOf(value).toEqualTypeOf<string>();
+
+						return value.toUpperCase();
+					});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string, ErrorA | ErrorB>
+				>();
+
+				const outcome = await nextResult;
+				Result.assertOk(outcome);
+				expect(outcome.value).toBe("SOME VALUE");
+			});
+
+			it("resolves the correct type when the returned value is a union of result-like and regular values", async () => {
+				function run(value: number) {
+					return Result.ok(value).map((value) => {
+						if (value === 1) {
+							return "one";
+						}
+
+						if (value === 2) {
+							return Result.ok("two" as const);
+						}
+
+						return Result.error(new ErrorB());
+					});
+				}
+
+				expectTypeOf(run(1)).toEqualTypeOf<Result<"one" | "two", ErrorB>>();
+
+				expect(run(1)).toEqual(Result.ok("one"));
+				expect(run(2)).toEqual(Result.ok("two"));
+				expect(run(3)).toEqual(Result.error(new ErrorB()));
+			});
 		});
 
 		describe("mapCatching", () => {

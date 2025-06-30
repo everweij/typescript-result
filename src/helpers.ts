@@ -102,3 +102,13 @@ export type NativeError = globalThis.Error;
 
 // biome-ignore lint/complexity/noBannedTypes:
 export type AnyValue = {};
+
+export type Contains<T, V, U = T> = (
+	T extends U
+		? U extends V
+			? true
+			: false
+		: false
+) extends false
+	? false
+	: true;

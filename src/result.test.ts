@@ -718,6 +718,26 @@ describe("Result", () => {
 			Result.assertError(result);
 			expect(result.error).toBeInstanceOf(CustomError);
 		});
+
+		it("allows you to transform the error that was thrown inside the callback into a new error", async () => {
+			const asyncResult = Result.fromAsyncCatching(
+				async (): Promise<number> => {
+					throw new CustomError("Boom!");
+				},
+				(error) => {
+					expect(error).toBeInstanceOf(CustomError);
+					return new ErrorA("my message", { cause: error });
+				},
+			);
+
+			expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<number, ErrorA>>();
+
+			const result = await asyncResult;
+
+			Result.assertError(result);
+
+			expect(result.error).toBeInstanceOf(ErrorA);
+		});
 	});
 
 	describe("instance methods and getters", () => {
@@ -1727,6 +1747,27 @@ describe("Result", () => {
 				>();
 				Result.assertOk(await recoveredResult);
 				expect(spy).not.toHaveBeenCalled();
+			});
+
+			it("allows you to transform the error that was thrown inside the callback into a new error", () => {
+				const result = Result.error(new ErrorA()) as Result<number, ErrorA>;
+
+				const nextResult = result.recoverCatching(
+					(error): number => {
+						expectTypeOf(error).toEqualTypeOf<ErrorA>();
+						throw new CustomError();
+					},
+					(error) => {
+						expect(error).toBeInstanceOf(CustomError);
+						return new ErrorB();
+					},
+				);
+
+				expectTypeOf(nextResult).toEqualTypeOf<Result<number, ErrorB>>();
+
+				Result.assertError(nextResult);
+
+				expect(nextResult.error).toBeInstanceOf(ErrorB);
 			});
 		});
 	});

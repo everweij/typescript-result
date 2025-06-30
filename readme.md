@@ -793,7 +793,7 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
     - [mapCatching(transformFn, transformErrorFn?)](#mapcatchingtransformfn-transformerrorfn)
     - [mapError(transformFn)](#maperrortransformfn)
     - [recover(onFailure)](#recoveronfailure)
-    - [recoverCatching(onFailure)](#recovercatchingonfailure)
+    - [recoverCatching(onFailure, transformErrorFn?)](#recovercatchingonfailure-transformerrorfn)
   - Static methods
     - [Result.ok(value)](#resultokvalue)
     - [Result.error(error)](#resulterrorerror)
@@ -824,7 +824,7 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
     - [mapCatching(transformFn, transfornErrorFn?)](#mapcatchingtransformfn-transformerrorfn-1)
     - [mapError(transformFn)](#maperrortransformfn-1)
     - [recover(onFailure)](#recoveronfailure-1)
-    - [recoverCatching(onFailure)](#recovercatchingonfailure-1)
+    - [recoverCatching(onFailure, transformErrorFn?)](#recovercatchingonfailure-transformerrorfn-1)
 
 ## Result
 
@@ -1229,7 +1229,7 @@ declare function persistLocally(item: Item): Result<Item, IOError>;
 persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
 ```
 
-### recoverCatching(onFailure)
+### recoverCatching(onFailure, transformErrorFn?)
 
 Like [`Result.recover`](#recoveronfailure) it transforms a failed result using the `onFailure` callback into a successful result.
 In addition, it catches any exceptions that might be thrown inside the `onFailure` callback and encapsulates them
@@ -1238,6 +1238,7 @@ in a failed result.
 #### Parameters
 
 - `onFailure` callback function to transform the error of the result. The callback can be async as well.
+- `transformError` callback function to transform any potential caught error while recovering the result.`
 
 **returns** a new successful [`Result`](#result) instance or a new successful [`AsyncResult`](#asyncresult) instance when the result represents a failure, or the original instance if it represents a success.
 
@@ -1775,7 +1776,7 @@ declare function persistLocally(item: Item): AsyncResult<Item, IOError>;
 persistInDB(item).recover(() => persistLocally(item)); // AsyncResult<Item, IOError>
 ```
 
-### recoverCatching(onFailure)
+### recoverCatching(onFailure, transformErrorFn?)
 
 Like [`AsyncResult.recover`](#recoveronfailure-1) it transforms a failed result using the `onFailure` callback into a successful result.
 In addition, it catches any exceptions that might be thrown inside the `onFailure` callback and encapsulates them
@@ -1784,6 +1785,7 @@ in a failed result.
 #### Parameters
 
 - `onFailure` callback function to transform the error of the result. The callback can be async as well.
+- `transformError` callback function to transform any potential caught error while recovering the result.`
 
 **returns** a new successful [`AsyncResult`](#asyncresult) instance when the result represents a failure, or the original instance
 if it represents a success.

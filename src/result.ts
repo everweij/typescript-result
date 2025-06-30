@@ -591,29 +591,35 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * in a failed result.
 	 *
 	 * @param onFailure callback function to transform the error of the result. The callback can be async as well.
+	 * @param transformError callback function to transform any potential caught error while recovering the result.
 	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
 	 * if it represents a success.
 	 */
 	recoverCatching<
 		This extends AnyAsyncResult,
 		ReturnType,
+		ErrorType = NativeError,
 		U = Awaited<ReturnType>,
-	>(this: This, onFailure: (error: InferError<This>) => ReturnType) {
+	>(
+		this: This,
+		onFailure: (error: InferError<This>) => ReturnType,
+		transformError?: (error: unknown) => ErrorType,
+	) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
-				resolve(result.recoverCatching(onFailure));
+				resolve(result.recoverCatching(onFailure, transformError));
 			}).catch(reject),
 		) as [ReturnType] extends [Promise<infer PValue>]
 			? PValue extends U
 				? AsyncResult<
 						InferValue<This> | ExtractValue<U>,
-						ExtractError<U> | NativeError
+						ExtractError<U> | ErrorType
 					>
 				: never
 			: ReturnType extends U
 				? AsyncResult<
 						InferValue<This> | ExtractValue<U>,
-						ExtractError<U> | NativeError
+						ExtractError<U> | ErrorType
 					>
 				: never;
 	}
@@ -1287,24 +1293,34 @@ export class Result<Value, Err> {
 	 * in a failed result.
 	 *
 	 * @param onFailure callback function to transform the error of the result. The callback can be async as well.
+	 * @param transformError callback function to transform any potential caught error while recovering the result.
 	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
 	 * when the result represents a failure, or the original instance if it represents a success.
 	 */
-	recoverCatching<This extends AnyResult, ReturnType, U = Awaited<ReturnType>>(
+	recoverCatching<
+		This extends AnyResult,
+		ReturnType,
+		ErrorType = NativeError,
+		U = Awaited<ReturnType>,
+	>(
 		this: This,
 		onFailure: (error: InferError<This>) => ReturnType,
+		transformError?: (err: unknown) => ErrorType,
 	) {
 		return (
 			this.success
 				? isAsyncFn(onFailure)
 					? AsyncResult.ok(this._value)
 					: this
-				: Result.try(() => onFailure(this._error))
+				: Result.try(
+						() => onFailure(this._error),
+						transformError as AnyFunction,
+					)
 		) as [ReturnType] extends [Promise<infer PValue>]
 			? PValue extends U
 				? AsyncResult<
 						InferValue<This> | ExtractValue<U>,
-						ExtractError<U> | NativeError
+						ExtractError<U> | ErrorType
 					>
 				: never
 			: IfReturnsAsync<
@@ -1312,13 +1328,13 @@ export class Result<Value, Err> {
 					ReturnType extends U
 						? AsyncResult<
 								InferValue<This> | ExtractValue<U>,
-								ExtractError<U> | NativeError
+								ExtractError<U> | ErrorType
 							>
 						: never,
 					ReturnType extends U
 						? Result<
 								InferValue<This> | ExtractValue<U>,
-								ExtractError<U> | NativeError
+								ExtractError<U> | ErrorType
 							>
 						: never
 				>;
@@ -1740,19 +1756,25 @@ export class Result<Value, Err> {
 	 * Similar to {@linkcode Result.fromAsync} this method transforms an async callback function into an {@linkcode AsyncResult} instance.
 	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
 	 */
-	static fromAsyncCatching<T>(
+	static fromAsyncCatching<T, ErrorType = NativeError>(
 		fn: () => Promise<T>,
-	): AsyncResult<ExtractValue<T>, ExtractError<T> | NativeError>;
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<ExtractValue<T>, ExtractError<T> | ErrorType>;
 	/**
 	 * Similar to {@linkcode Result.fromAsync} this method transforms a Promise into an {@linkcode AsyncResult} instance.
 	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
 	 */
-	static fromAsyncCatching<T>(
+	static fromAsyncCatching<T, ErrorType = NativeError>(
 		value: Promise<T>,
-	): AsyncResult<ExtractValue<T>, ExtractError<T> | NativeError>;
-	static fromAsyncCatching(valueOrFn: AnyPromise | AnyAsyncFunction) {
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<ExtractValue<T>, ExtractError<T> | ErrorType>;
+	static fromAsyncCatching(
+		valueOrFn: AnyPromise | AnyAsyncFunction,
+		transformError?: (err: unknown) => any,
+	) {
 		return Result.try(
 			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
+			transformError as AnyFunction,
 		);
 	}
 

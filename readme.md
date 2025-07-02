@@ -1112,13 +1112,13 @@ const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(v
 ### map(transformFn)
 
 Transforms the value of a successful result using the `transform` callback.
-The `transform` callback can also return other `Result` or [`AsyncResult`](#asyncresult) instances,
-which will be returned as-is (the `Error` types will be merged).
+The `transform` callback can also be a generator function or a function that return other `Result` or [`AsyncResult`](#asyncresult) instances,
+which will be returned as-is (the `Error` types will be merged, conceptually similar to `Array.flatMap()`).
 The operation will be ignored if the result represents a failure.
 
 #### Parameters
 
-- `transformFn` callback function to transform the value of the result. The callback can be async as well.
+- `transformFn` callback function to transform the value of the result. The callback can be async or a generator function as well.
 
 **returns** * a new [`Result`](#result) instance with the transformed value, or a new [`AsyncResult`](#asyncresult) instance
 if the `transformFn` function is async.
@@ -1163,6 +1163,18 @@ declare function storeValue(value: number): AsyncResult<boolean, Error>;
 const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 ```
 
+#### Example
+using a generator function to transform the value
+
+```ts
+function* doubleValue(value: number) {
+  return value * 2;
+}
+
+declare const result: Result<number, Error>;
+const transformed = result.map(doubleValue); // Result<number, Error>
+```
+
 ### mapCatching(transformFn, transformErrorFn?)
 
 Like [`Result.map`](#maptransformfn) it transforms the value of a successful result using the `transform` callback.
@@ -1171,7 +1183,7 @@ in a failed result.
 
 #### Parameters
 
-- `transformFn` callback function to transform the value of the result. The callback can be async as well.
+- `transformFn` callback function to transform the value of the result. The callback can be async or a generator function as well.
 - `transformErrorFn` optional callback function that transforms any caught error inside `transformFn` into a specific error.
 
 **returns** * a new [`Result`](#result) instance with the transformed value, or a new [`AsyncResult`](#asyncresult) instance if the transform function is async.
@@ -1201,14 +1213,14 @@ result.mapError((error) => new ErrorB(error.message)); // Result<number, ErrorB>
 
 Transforms a failed result using the `onFailure` callback into a successful result. Useful for falling back to
 other scenarios when a previous operation fails.
-The `onFailure` callback can also return other `Result` or [`AsyncResult`](#asyncresult) instances,
+The `onFailure` callback can also be a generator function or a function that returns other `Result` or [`AsyncResult`](#asyncresult) instances,
 which will be returned as-is.
 After a recovery, logically, the result can only be a success. Therefore, the error type is set to `never`, unless
 the `onFailure` callback returns a result-instance with another error type.
 
 #### Parameters
 
-- `onFailure` callback function to transform the error of the result. The callback can be async as well.
+- `onFailure` callback function to transform the error of the result. The callback can be async or a generator function as well.
 
 **returns** a new successful [`Result`](#result) instance or a new successful [`AsyncResult`](#asyncresult) instance
 when the result represents a failure, or the original instance if it represents a success.
@@ -1237,7 +1249,7 @@ in a failed result.
 
 #### Parameters
 
-- `onFailure` callback function to transform the error of the result. The callback can be async as well.
+- `onFailure` callback function to transform the error of the result. The callback can be async or a generator function as well.
 - `transformError` callback function to transform any potential caught error while recovering the result.`
 
 **returns** a new successful [`Result`](#result) instance or a new successful [`AsyncResult`](#asyncresult) instance when the result represents a failure, or the original instance if it represents a success.
@@ -1302,7 +1314,7 @@ Each argument can be a mixture of literal values, functions, [`Result`](#result)
 
 #### Parameters
 
-- `items` one or multiple literal value, function, [`Result`](#result) or [`AsyncResult`](#asyncresult) instance, or `Promise`.
+- `items` one or multiple literal value, function, [`Result`](#result) or [`AsyncResult`](#asyncresult) instance, `Promise`, or (async) generator function.
 
 **returns** combined result of all the operations.
 
@@ -1332,7 +1344,8 @@ const result = Result.all(
   () => Result.try(async () => "f"),
   () => Result.ok("g"),
   async () => "h",
-); // AsyncResult<[string, string, string, string, string, string, string, string], Error>
+  function *() { return "i"; }
+); // AsyncResult<[string, string, string, string, string, string, string, string, string], Error>
 ```
 
 ### Result.allCatching(items)
@@ -1435,6 +1448,37 @@ const asyncResult = Result.fromAsync(someAsyncOperation()).map((value) => value 
 
 Similar to [`Result.fromAsync`](#resultfromasync) this method transforms a Promise or async callback function into an [`AsyncResult`](#asyncresult) instance.
 In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
+
+### Result.gen()
+
+Executes the given `fn` (async) generator function and encapsulates the returned value or error as a Result.
+This method is often used once as entry point to run a specific flow. The reason for this is that nested generator functions or calls to other functions that return results are supported.
+
+#### Parameters
+- `fn` (async) generator function to execute.
+
+**returns** a new [`AsyncResult`](#asyncresult) or `Result` instance depending on the provided callback fn.
+
+#### Example
+
+```ts
+const result = Result.gen(async function* () {
+   const order = yield* getOrderById("123"); // AsyncResult<Order, NotFoundError>
+   yield* order.ship(); // Result<void, InvalidOrderStatusError>;
+   const arrivalDate = await shipmentService.calculateArrivalDate(order);
+   return `Your order has been shipped and is expected to arrive on ${arrivalDate}!`;
+}); // AsyncResult<string, NotFoundError | InvalidOrderStatusError>;
+```
+
+### Result.genCatching()
+
+Similar to [`Result.gen()`](#resultgen) this method transforms the given generator function into a `Result` or [`AsyncResult`](#asyncresult) depending on whether the generator function contains async operations or not.
+In addition, it catches any exceptions that might be thrown during any operation and encapsulates them in a failed result.
+
+#### Parameters
+- `fn` (async) generator function to execute.
+
+**returns** a new [`AsyncResult`](#asyncresult) or `Result` instance depending on the provided callback fn.
 
 ### Result.assertOk(result)
 
@@ -1658,13 +1702,13 @@ const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(v
 ### map(transformFn)
 
 Transforms the value of a successful result using the `transform` callback.
-The `transform` callback can also return other `Result` or [`AsyncResult`](#asyncresult) instances,
-which will be returned as-is (the `Error` types will be merged).
+The `transform` callback can also be a generator function or a function that return other `Result` or [`AsyncResult`](#asyncresult) instances,
+which will be returned as-is (the `Error` types will be merged, conceptually similar to `Array.flatMap()`).
 The operation will be ignored if the result represents a failure.
 
 #### Parameters
 
-- `transformFn` callback function to transform the value of the result. The callback can be async as well.
+- `transformFn` callback function to transform the value of the result. The callback can be async or a generator function as well.
 
 **returns** a new [`AsyncResult`](#asyncresult) instance with the transformed value
 
@@ -1708,6 +1752,18 @@ declare function storeValue(value: number): AsyncResult<boolean, Error>;
 const transformed = result.map((value) => storeValue(value)); // AsyncResult<boolean, Error>
 ```
 
+#### Example
+using a generator function to transform the value
+
+```ts
+function* doubleValue(value: number) {
+  return value * 2;
+}
+
+declare const result: Async<number, Error>;
+const transformed = result.map(doubleValue); // Async<number, Error>
+```
+
 ### mapCatching(transformFn, transformErrorFn?)
 
 Like [`AsyncResult.map`](#maptransformfn-1) it transforms the value of a successful result using the `transformFn` callback.
@@ -1716,7 +1772,7 @@ in a failed result.
 
 #### Parameters
 
-- `transformFn` callback function to transform the value of the result. The callback can be async as well.
+- `transformFn` callback function to transform the value of the result. The callback can be async or a generator function as well.
 - `transformErrorFn` optional callback function that transforms any caught error inside `transformFn` into a specific error.
 
 **returns** a new [`AsyncResult`](#asyncresult) instance with the transformed value
@@ -1748,14 +1804,13 @@ const result = Result.try(() => fetch("https://example.com"))
 
 Transforms a failed result using the `onFailure` callback into a successful result. Useful for falling back to
 other scenarios when a previous operation fails.
-The `onFailure` callback can also return other `Result` or [`AsyncResult`](#asyncresult) instances,
-which will be returned as-is.
+The `onFailure` callback can also be a generator function or a function that returns other `Result` or [`AsyncResult`](#asyncresult) instances, which will be returned as-is (much like `Array.flatMap`).
 After a recovery, logically, the result can only be a success. Therefore, the error type is set to `never`, unless
 the `onFailure` callback returns a result-instance with another error type.
 
 #### Parameters
 
-- `onFailure` callback function to transform the error of the result. The callback can be async as well.
+- `onFailure` callback function to transform the error of the result. The callback can be async or a generator function as well.
 
 **returns** a new successful [`AsyncResult`](#asyncresult) instance when the result represents a failure, or the original instance
 if it represents a success.
@@ -1784,7 +1839,7 @@ in a failed result.
 
 #### Parameters
 
-- `onFailure` callback function to transform the error of the result. The callback can be async as well.
+- `onFailure` callback function to transform the error of the result. The callback can be async or a generator function as well.
 - `transformError` callback function to transform any potential caught error while recovering the result.`
 
 **returns** a new successful [`AsyncResult`](#asyncresult) instance when the result represents a failure, or the original instance

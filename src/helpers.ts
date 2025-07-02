@@ -19,6 +19,30 @@ export function isAsyncFn(fn: AnyFunction): fn is AnyAsyncFunction {
 	return fn.constructor.name === "AsyncFunction";
 }
 
+export function isGenerator(obj: any): obj is Generator {
+	return (
+		typeof obj === "object" &&
+		obj !== null &&
+		typeof obj.next === "function" &&
+		typeof obj.throw === "function" &&
+		typeof obj.return === "function" &&
+		typeof obj[Symbol.iterator] === "function" &&
+		obj[Symbol.iterator]() === obj
+	);
+}
+
+export function isAsyncGenerator(obj: any): obj is AsyncGenerator {
+	return (
+		typeof obj === "object" &&
+		obj !== null &&
+		typeof obj.next === "function" &&
+		typeof obj.throw === "function" &&
+		typeof obj.return === "function" &&
+		typeof obj[Symbol.asyncIterator] === "function" &&
+		obj[Symbol.asyncIterator]() === obj
+	);
+}
+
 /**
  * Utility function to assert that a case is unreachable
  * @param value the value which to check for exhaustiveness
@@ -45,51 +69,7 @@ export function assertUnreachable(value: never): never {
 
 export type IsAsyncFunction<T> = T extends AnyAsyncFunction ? true : false;
 
-type IsPromiseOrAsyncFunction<T> = T extends AnyAsyncFunction
-	? true
-	: T extends Promise<any>
-		? true
-		: false;
-
 export type IsFunction<T> = T extends AnyFunction ? true : false;
-
-type IsPromise<T> = T extends AnyPromise ? true : false;
-
-export type UnionContainsPromise<Union> = AnyPromise extends Union
-	? true
-	: false;
-
-export type ListContains<Items extends any[]> = Items[number] extends false
-	? false
-	: true;
-
-export type ListContainsPromiseOrAsyncFunction<T extends any[]> = ListContains<{
-	[Index in keyof T]: IsPromiseOrAsyncFunction<T[Index]>;
-}>;
-
-export type ListContainsFunction<T extends any[]> = ListContains<{
-	[Index in keyof T]: IsFunction<T[Index]>;
-}>;
-
-export type ListContainsPromise<T extends any[]> = ListContains<{
-	[Index in keyof T]: IsPromise<T[Index]>;
-}>;
-
-export type Union<T extends any[]> = T[number];
-
-export type Unwrap<T> = T extends (...args: any[]) => Promise<infer U>
-	? U
-	: T extends (...args: any[]) => infer U
-		? U
-		: T extends Promise<infer U>
-			? U
-			: T;
-
-export type UnwrapList<Items extends any[]> = {
-	[Index in keyof Items]: Unwrap<Items[Index]>;
-};
-
-export type InferPromise<T> = T extends Promise<infer U> ? U : never;
 
 export type AnyPromise = Promise<any>;
 
@@ -100,7 +80,6 @@ export type AnyAsyncFunction<Returning = any> = (
 
 export type NativeError = globalThis.Error;
 
-// biome-ignore lint/complexity/noBannedTypes:
 export type AnyValue = {};
 
 export type Contains<T, V, U = T> = (

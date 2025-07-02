@@ -115,6 +115,33 @@ describe("Result", () => {
 			expectTypeOf(asyncResultFlattened).toEqualTypeOf<
 				AsyncResult<string, Error | ErrorA>
 			>();
+
+			const generatorResultA = Result.try(function* () {
+				return "string literal";
+			});
+			expectTypeOf(generatorResultA).toEqualTypeOf<Result<string, Error>>();
+
+			const generatorResultB = Result.try(function* () {
+				return Result.ok("some value");
+			});
+			expectTypeOf(generatorResultB).toEqualTypeOf<Result<string, Error>>();
+
+			const generatorResultC = Result.try(async function* () {
+				return "string literal";
+			});
+			expectTypeOf(generatorResultC).toEqualTypeOf<
+				AsyncResult<string, Error>
+			>();
+
+			const generatorResultD = Result.try(
+				async function* () {
+					return Result.ok("some value");
+				},
+				(error) => new ErrorA("my message", { cause: error }),
+			);
+			expectTypeOf(generatorResultD).toEqualTypeOf<
+				AsyncResult<string, ErrorA>
+			>();
 		});
 
 		it("executes a provided callback and wraps an successful outcome in a result", () => {
@@ -213,6 +240,65 @@ describe("Result", () => {
 			const resultB = await asyncResultB;
 			Result.assertError(resultB);
 			expect(resultB.error).toBeInstanceOf(CustomError);
+		});
+
+		it("executes a provided generator function and returns a result", () => {
+			const result = Result.try(function* () {
+				const a = yield* Result.ok(1);
+				const b = yield* Result.ok(2);
+
+				return a + b;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<Result<number, Error>>();
+			Result.assertOk(result);
+			expect(result.value).toBe(3);
+		});
+
+		it("executes a provided generator function and returns a failed result when an error is thrown", () => {
+			const result = Result.try(function* () {
+				const a = yield* Result.ok(12);
+				throw new CustomError();
+
+				// biome-ignore lint/correctness/noUnreachable: for testing purposes
+				return a;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<Result<number, Error>>();
+			Result.assertError(result);
+			expect(result.error).toBeInstanceOf(CustomError);
+		});
+
+		it("executes a provided async generator function and returns a async-result", async () => {
+			const asyncResult = Result.try(async function* () {
+				const a = yield* Result.ok(1);
+				const b = yield* AsyncResult.ok(2);
+
+				return a + b;
+			});
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<number, Error>>();
+
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe(3);
+		});
+
+		it("executes a provided async generator function and returns a failed async-result when an error is thrown", async () => {
+			const asyncResult = Result.try(async function* () {
+				const a = yield* Result.ok(12);
+				throw new CustomError();
+
+				// biome-ignore lint/correctness/noUnreachable: for testing purposes
+				return a;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<number, Error>>();
+
+			const result = await asyncResult;
+			Result.assertError(result);
+			expect(result.error).toBeInstanceOf(CustomError);
 		});
 	});
 
@@ -497,6 +583,54 @@ describe("Result", () => {
 			Result.assertError(result);
 			expect(result.error).toBeInstanceOf(CustomError);
 		});
+
+		it("does not track any thrown error when not needed", () => {
+			const result = Result.allCatching(Result.ok("a"));
+			expectTypeOf(result).toEqualTypeOf<Result<[string], never>>();
+		});
+
+		it("handles generators correctly", () => {
+			const result = Result.allCatching("a", function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+				return a + b;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<[string, number], Error | ErrorA | ErrorB>
+			>();
+			Result.assertOk(result);
+			expect(result.value).toEqual(["a", 3]);
+		});
+
+		it("handles async generators correctly", async () => {
+			const asyncResult = Result.allCatching("a", async function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+				return a + b;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<[string, number], Error | ErrorA | ErrorB>
+			>();
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toEqual(["a", 3]);
+		});
+
+		it("handles generators correctly that return a async-result", async () => {
+			const asyncResult = Result.allCatching("a", function* () {
+				return AsyncResult.ok(3);
+			});
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<[string, number], Error>
+			>();
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toEqual(["a", 3]);
+		});
 	});
 
 	describe("Result.all", () => {
@@ -510,11 +644,34 @@ describe("Result", () => {
 				() => Result.try(async () => "f"),
 				() => Result.ok("g"),
 				async () => "h",
+				function* () {
+					const i = yield* Result.ok("i");
+
+					return Result.ok(i);
+				},
+				function* () {
+					return AsyncResult.ok("j");
+				},
+				async function* () {
+					return AsyncResult.ok("k");
+				},
 			);
 
 			expectTypeOf(asyncAllResult).toEqualTypeOf<
 				AsyncResult<
-					[string, string, string, string, string, string, string, string],
+					[
+						string,
+						string,
+						string,
+						string,
+						string,
+						string,
+						string,
+						string,
+						string,
+						string,
+						string,
+					],
 					Error
 				>
 			>();
@@ -522,7 +679,19 @@ describe("Result", () => {
 			expect(asyncAllResult).toBeInstanceOf(AsyncResult);
 			const result = await asyncAllResult;
 			Result.assertOk(result);
-			expect(result.value).toEqual(["a", "b", "c", "d", "e", "f", "g", "h"]);
+			expect(result.value).toEqual([
+				"a",
+				"b",
+				"c",
+				"d",
+				"e",
+				"f",
+				"g",
+				"h",
+				"i",
+				"j",
+				"k",
+			]);
 		});
 
 		it("does not track async exceptions but throws them instead", async () => {
@@ -737,6 +906,318 @@ describe("Result", () => {
 			Result.assertError(result);
 
 			expect(result.error).toBeInstanceOf(ErrorA);
+		});
+	});
+
+	describe("Result.gen", () => {
+		it("handles a sync generator function correctly", () => {
+			const result = Result.gen(function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+				return a + b;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA | ErrorB>>();
+			expect(result).toEqual(Result.ok(3));
+		});
+
+		it("handles a sync generator function that yields an error correctly", () => {
+			const result = Result.gen(function* () {
+				const a = yield* Result.error(new ErrorA()) as Result<number, ErrorA>;
+
+				throw new Error("This should not be reached");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+				return a + b;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA | ErrorB>>();
+			expect(result).toEqual(Result.error(new ErrorA()));
+		});
+
+		it("handles an async generator function correctly", async () => {
+			const asyncResult = Result.gen(function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+				const c = yield* Result.ok(3) as Result<number, ErrorB>;
+
+				return a + b + c;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB>
+			>();
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			expect(result).toEqual(Result.ok(6));
+		}, 1000);
+
+		it("handles an async generator function that yields an error correctly", async () => {
+			const asyncResult = Result.gen(function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* AsyncResult.fromPromise(
+					Promise.resolve(Result.error(new ErrorB())),
+				) as AsyncResult<number, ErrorB>;
+
+				throw new Error("This should not be reached");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				const c = yield* Result.ok(3) as Result<number, ErrorB>;
+
+				return a + b + c;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB>
+			>();
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			expect(result).toEqual(Result.error(new ErrorB()));
+		}, 1000);
+
+		it("supports nested sync generator functions", () => {
+			function* syncFn() {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+				return a + b;
+			}
+
+			const nestedSync = Result.gen(function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* syncFn();
+
+				return a + b;
+			});
+
+			expectTypeOf(nestedSync).toEqualTypeOf<Result<number, ErrorA | ErrorB>>();
+			expect(nestedSync).toEqual(Result.ok(4));
+		});
+
+		it("supports nested async generator functions", async () => {
+			async function* asyncFn() {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+
+				return a + b;
+			}
+
+			const nestedAsync = Result.gen(async function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* asyncFn();
+
+				return a + b;
+			});
+
+			expectTypeOf(nestedAsync).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB>
+			>();
+
+			expect(nestedAsync).toBeInstanceOf(AsyncResult);
+			const result = await nestedAsync;
+			expect(result).toEqual(Result.ok(4));
+		});
+
+		it("supports generator functions that return a literal value", async () => {
+			const asyncResult = Result.gen(async function* () {
+				return 12;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<number, never>>();
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			expect(await asyncResult).toEqual(Result.ok(12));
+		});
+
+		it("supports sync generator functions that return a result", () => {
+			const asyncResult = Result.gen(function* () {
+				return Result.ok(12);
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<Result<number, never>>();
+			expect(asyncResult).toBeInstanceOf(Result);
+			expect(asyncResult).toEqual(Result.ok(12));
+		});
+
+		it("supports async generator functions that returns a result", async () => {
+			const asyncResult = Result.gen(async function* () {
+				return Result.ok(12) as Result<number, ErrorA>;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<AsyncResult<number, ErrorA>>();
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			expect(await asyncResult).toEqual(Result.ok(12));
+		});
+
+		it("correctly detects when an async result is returned", () => {
+			const result = Result.gen(function* () {
+				return AsyncResult.ok(12) as AsyncResult<number, ErrorA>;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<AsyncResult<number, ErrorA>>();
+		});
+
+		it("does not track thrown expections", () => {
+			expect(() =>
+				Result.gen(function* () {
+					throw new CustomError("Boom!");
+				}),
+			).to.throw(CustomError);
+		});
+
+		it("does not track thrown expections in async generator functions", async () => {
+			await expect(() =>
+				Result.gen(async function* () {
+					throw new CustomError("Boom!");
+				}),
+			).rejects.toThrow(CustomError);
+		});
+
+		it("mixed", async () => {
+			function* someOtherFunc() {
+				yield 5; // this should be simply ignored
+				return 4;
+			}
+
+			function* someFunc() {
+				const a = yield* someOtherFunc();
+				return a;
+			}
+
+			const asyncResult = Result.gen(function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+				const c = yield* Result.ok(3) as Result<number, ErrorB>;
+				const d = yield* someFunc();
+
+				return a + b + c + d;
+			});
+
+			const result = await asyncResult;
+			expect(result).toEqual(Result.ok(10));
+		});
+	});
+
+	describe("Result.genCatching", () => {
+		it("returns a successful result from a generator function", () => {
+			const result = Result.genCatching(
+				function* () {
+					const a = yield* Result.ok(1) as Result<number, ErrorA>;
+					const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+					return a + b;
+				},
+				() => new CustomError("Custom error"),
+			);
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<number, CustomError | ErrorA | ErrorB>
+			>();
+			Result.assertOk(result);
+			expect(result.value).toBe(3);
+		});
+
+		it("tracks thrown exceptions in a generator function and transforms them using the provided callback function", () => {
+			const result = Result.genCatching(
+				function* () {
+					const a = yield* Result.ok(1) as Result<number, ErrorA>;
+					const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+					throw new Error("Boom!");
+
+					// biome-ignore lint/correctness/noUnreachable: for testing
+					return a + b;
+				},
+				() => new CustomError("Custom error"),
+			);
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<number, ErrorA | ErrorB | Error>
+			>();
+			Result.assertError(result);
+			expect(result.error).toEqual(new CustomError("Custom error"));
+		});
+
+		it("tracks thrown exceptions in a generator function and encapsulates them in a failed result", () => {
+			const result = Result.genCatching(function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+				throw new Error("Boom!");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				return a + b;
+			});
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<number, ErrorA | ErrorB | Error>
+			>();
+			Result.assertError(result);
+			expect(result.error).toEqual(new Error("Boom!"));
+		});
+
+		it("tracks thrown exceptions in a generator function (with async-result) and returns them as an error", async () => {
+			const asyncResult = Result.genCatching(
+				function* () {
+					const a = yield* Result.ok(1) as Result<number, ErrorA>;
+					const b = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+
+					throw new Error("Boom!");
+
+					// biome-ignore lint/correctness/noUnreachable: for testing
+					return a + b;
+				},
+				() => new CustomError("Custom error"),
+			);
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB | Error>
+			>();
+			const result = await asyncResult;
+			Result.assertError(result);
+			expect(result.error).toEqual(new CustomError("Custom error"));
+		});
+
+		it("tracks thrown exceptions in an async generator function and transforms them using the provided callback fn", async () => {
+			const asyncResult = Result.genCatching(
+				async function* () {
+					const a = yield* Result.ok(1) as Result<number, ErrorA>;
+					const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+					throw new Error("Boom!");
+
+					// biome-ignore lint/correctness/noUnreachable: for testing
+					return a + b;
+				},
+				() => new CustomError("Custom error"),
+			);
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB | Error>
+			>();
+			const result = await asyncResult;
+			Result.assertError(result);
+			expect(result.error).toEqual(new CustomError("Custom error"));
+		});
+
+		it("tracks thrown exceptions in an async generator function and encapsulates them in a failed result", async () => {
+			const asyncResult = Result.genCatching(async function* () {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+				const b = yield* Result.ok(2) as Result<number, ErrorB>;
+
+				throw new Error("Boom!");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				return a + b;
+			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB | Error>
+			>();
+			const result = await asyncResult;
+			Result.assertError(result);
+			expect(result.error).toEqual(new Error("Boom!"));
 		});
 	});
 
@@ -1148,6 +1629,18 @@ describe("Result", () => {
 				expectTypeOf(successOutcome).toEqualTypeOf<Promise<number>>();
 				expect(successOutcome).toBeInstanceOf(Promise);
 			});
+
+			it("returns a promise when at least one of the handlers returns a promise", async () => {
+				const failureResult = Result.error(errorA) as Result<number, ErrorA>;
+				const failureOutcome = failureResult.fold(
+					() => (Math.random() > 0.5 ? Promise.resolve(12) : 12),
+					() => 12,
+				);
+
+				expectTypeOf(failureOutcome).toEqualTypeOf<Promise<number>>();
+				const val = await failureOutcome;
+				expect(val).toEqual(12);
+			});
 		});
 
 		describe("onFailure", () => {
@@ -1470,6 +1963,43 @@ describe("Result", () => {
 				expect(await runAsync(2)).toEqual(Result.ok("two"));
 				expect(await runAsync(3)).toEqual(Result.error(new ErrorB()));
 			});
+
+			it("takes an sync generator function as a transform function", () => {
+				const result = Result.ok(1) as Result<number, ErrorA>;
+				const nextResult = result.map(function* (value) {
+					expectTypeOf(value).toEqualTypeOf<number>();
+
+					const other = yield* Result.ok(2) as Result<number, ErrorB>;
+
+					return value + other;
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					Result<number, ErrorA | ErrorB>
+				>();
+				Result.assertOk(nextResult);
+				expect(nextResult.value).toBe(3);
+			});
+
+			it("takes an async generator function as a transform function", async () => {
+				const result = Result.ok(1) as Result<number, ErrorA>;
+				const nextAsyncResult = result.map(async function* (value) {
+					expectTypeOf(value).toEqualTypeOf<number>();
+
+					const other = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+
+					return value + other;
+				});
+
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<number, ErrorA | ErrorB>
+				>();
+				expect(nextAsyncResult).toBeInstanceOf(AsyncResult);
+
+				const nextResult = await nextAsyncResult;
+				Result.assertOk(nextResult);
+				expect(nextResult.value).toBe(3);
+			});
 		});
 
 		describe("mapCatching", () => {
@@ -1582,6 +2112,41 @@ describe("Result", () => {
 					| Result<number, ErrorB>
 					| Result<never, CustomError | ErrorB>
 				>();
+			});
+
+			it("takes an sync generator function as a transform function", () => {
+				const result = Result.ok(1) as Result<number, ErrorA>;
+				const nextResult = result.mapCatching(function* (value) {
+					expectTypeOf(value).toEqualTypeOf<number>();
+					const other = yield* Result.ok(2) as Result<number, ErrorB>;
+					return value + other;
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					Result<number, ErrorA | ErrorB | Error>
+				>();
+				Result.assertOk(nextResult);
+				expect(nextResult.value).toBe(3);
+			});
+
+			it("takes an async generator function as a transform function", async () => {
+				const result = Result.ok(1) as Result<number, ErrorA>;
+				const nextAsyncResult = result.mapCatching(async function* (value) {
+					expectTypeOf(value).toEqualTypeOf<number>();
+
+					const other = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+
+					return value + other;
+				});
+
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<number, ErrorA | ErrorB | Error>
+				>();
+				expect(nextAsyncResult).toBeInstanceOf(AsyncResult);
+
+				const nextResult = await nextAsyncResult;
+				Result.assertOk(nextResult);
+				expect(nextResult.value).toBe(3);
 			});
 		});
 
@@ -1703,6 +2268,29 @@ describe("Result", () => {
 				Result.assertOk(recoveredResult);
 				expect(recoveredResult.value).toBe(12);
 			});
+
+			it("supports a generator function as transform callback", async () => {
+				const result = Result.error(new CustomError());
+
+				const recoveredResult = result.recover(function* () {
+					return yield* Result.ok(12);
+				});
+				expect(recoveredResult).toBeInstanceOf(Result);
+				Result.assertOk(recoveredResult);
+				expect(recoveredResult.value).toBe(12);
+			});
+
+			it("supports an async generator function as transform callback", async () => {
+				const result = Result.error(new CustomError());
+
+				const recoveredResult = result.recover(async function* () {
+					return yield* Result.ok(12);
+				});
+				expect(recoveredResult).toBeInstanceOf(AsyncResult);
+				const resolvedRecoveredResult = await recoveredResult;
+				Result.assertOk(resolvedRecoveredResult);
+				expect(resolvedRecoveredResult.value).toBe(12);
+			});
 		});
 
 		describe("recoverCatching", () => {
@@ -1768,6 +2356,29 @@ describe("Result", () => {
 				Result.assertError(nextResult);
 
 				expect(nextResult.error).toBeInstanceOf(ErrorB);
+			});
+
+			it("supports a generator function as transform callback", async () => {
+				const result = Result.error(new CustomError());
+
+				const recoveredResult = result.recoverCatching(function* () {
+					return yield* Result.ok(12);
+				});
+				expect(recoveredResult).toBeInstanceOf(Result);
+				Result.assertOk(recoveredResult);
+				expect(recoveredResult.value).toBe(12);
+			});
+
+			it("supports an async generator function as transform callback", async () => {
+				const result = Result.error(new CustomError());
+
+				const recoveredResult = result.recoverCatching(async function* () {
+					return yield* Result.ok(12);
+				});
+				expect(recoveredResult).toBeInstanceOf(AsyncResult);
+				const resolvedRecoveredResult = await recoveredResult;
+				Result.assertOk(resolvedRecoveredResult);
+				expect(resolvedRecoveredResult.value).toBe(12);
 			});
 		});
 	});
@@ -2441,6 +3052,46 @@ describe("AsyncResult", () => {
 					}),
 				).rejects.toThrow(CustomError);
 			});
+
+			it("takes an sync generator function as a transform function", async () => {
+				const asyncResult = AsyncResult.ok(1) as AsyncResult<number, ErrorA>;
+				const nextAsyncResult = asyncResult.map(function* (value) {
+					expectTypeOf(value).toEqualTypeOf<number>();
+
+					const other = yield* Result.ok(2) as Result<number, ErrorB>;
+
+					return value + other;
+				});
+
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<number, ErrorA | ErrorB>
+				>();
+				expect(nextAsyncResult).toBeInstanceOf(AsyncResult);
+
+				const nextResult = await nextAsyncResult;
+				Result.assertOk(nextResult);
+				expect(nextResult.value).toBe(3);
+			});
+
+			it("takes an async generator function as a transform function", async () => {
+				const asyncResult = AsyncResult.ok(1) as AsyncResult<number, ErrorA>;
+				const nextAsyncResult = asyncResult.map(async function* (value) {
+					expectTypeOf(value).toEqualTypeOf<number>();
+
+					const other = yield* AsyncResult.ok(2) as AsyncResult<number, ErrorB>;
+
+					return value + other;
+				});
+
+				expectTypeOf(nextAsyncResult).toEqualTypeOf<
+					AsyncResult<number, ErrorA | ErrorB>
+				>();
+				expect(nextAsyncResult).toBeInstanceOf(AsyncResult);
+
+				const nextResult = await nextAsyncResult;
+				Result.assertOk(nextResult);
+				expect(nextResult.value).toBe(3);
+			});
 		});
 
 		describe("mapCatching", () => {
@@ -2648,6 +3299,30 @@ describe("AsyncResult", () => {
 						throw new CustomError();
 					}),
 				).rejects.toThrow(CustomError);
+			});
+
+			it("supports a generator function as transform callback", async () => {
+				const asyncResult = AsyncResult.error(new CustomError());
+
+				const asyncRecoveredResult = asyncResult.recover(function* () {
+					return yield* Result.ok(12);
+				});
+				expect(asyncRecoveredResult).toBeInstanceOf(AsyncResult);
+				const resolvedRecoveredResult = await asyncRecoveredResult;
+				Result.assertOk(resolvedRecoveredResult);
+				expect(resolvedRecoveredResult.value).toBe(12);
+			});
+
+			it("supports an async generator function as transform callback", async () => {
+				const asyncResult = AsyncResult.error(new CustomError());
+
+				const recoveredAsyncResult = asyncResult.recover(async function* () {
+					return yield* Result.ok(12);
+				});
+				expect(recoveredAsyncResult).toBeInstanceOf(AsyncResult);
+				const resolvedRecoveredResult = await recoveredAsyncResult;
+				Result.assertOk(resolvedRecoveredResult);
+				expect(resolvedRecoveredResult.value).toBe(12);
 			});
 		});
 

@@ -1,7 +1,7 @@
 {
 	"private": false,
 	"name": "typescript-result",
-	"version": "3.2.0-beta.6",
+	"version": "3.2.0",
 	"description": "A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable.",
 	"keywords": [
 		"result",
@@ -20,7 +20,7 @@
 		"url": "https://github.com/everweij"
 	},
 	"repository": "github:everweij/typescript-result",
-  "homepage": "https://github.com/everweij/typescript-result#readme",
+	"homepage": "https://github.com/everweij/typescript-result#readme",
 	"bugs": {
 		"url": "https://github.com/everweij/typescript-result/issues/new"
 	},

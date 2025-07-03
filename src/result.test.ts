@@ -1097,6 +1097,23 @@ describe("Result", () => {
 			const result = await asyncResult;
 			expect(result).toEqual(Result.ok(10));
 		});
+
+		it("allows to to pass the 'this' context", () => {
+			class MyClass {
+				constructor(public someValue: number) {}
+
+				methodA() {
+					return Result.gen(this, function* () {
+						return this.someValue;
+					});
+				}
+			}
+
+			const result = new MyClass(42).methodA();
+			expectTypeOf(result).toEqualTypeOf<Result<number, never>>();
+			Result.assertOk(result);
+			expect(result.value).toBe(42);
+		});
 	});
 
 	describe("Result.genCatching", () => {
@@ -1218,6 +1235,23 @@ describe("Result", () => {
 			const result = await asyncResult;
 			Result.assertError(result);
 			expect(result.error).toEqual(new Error("Boom!"));
+		});
+
+		it("allows to to pass the 'this' context", () => {
+			class MyClass {
+				constructor(public someValue: number) {}
+
+				methodA() {
+					return Result.genCatching(this, function* () {
+						return this.someValue;
+					});
+				}
+			}
+
+			const result = new MyClass(42).methodA();
+			expectTypeOf(result).toEqualTypeOf<Result<number, Error>>();
+			Result.assertOk(result);
+			expect(result.value).toBe(42);
 		});
 	});
 

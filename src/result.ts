@@ -1987,6 +1987,7 @@ export class Result<Value, Err> {
 	 * Executes the given {@linkcode fn} (async) generator function and encapsulates the returned value or error as a Result.
 	 * This method is often used once as entry point to run a specific flow. The reason for this is that nested generator functions or calls to other functions that return results are supported.
 	 *
+	 * @param self optional `this` context to bind the generator function to.
 	 * @param fn generator function with code to execute. Can be synchronous or asynchronous.
 	 * @returns a new {@linkcode Result} or {@linkcode AsyncResult} instance depending on the provided callback fn.
 	 *
@@ -2001,14 +2002,43 @@ export class Result<Value, Err> {
 	 * }); // AsyncResult<string, NotFoundError | InvalidOrderStatusError>;
 	 * ```
 	 *
+	 * @example
+	 * this context
+	 * ```ts
+	 * class MyClass {
+	 *   someValue = 12;
+	 *
+	 *   someMethod() {
+	 *     return Result.gen(this, function* () {
+	 *       const otherValue = yield* Result.ok(8);
+	 *       return `The sum is ${this.someValue + otherValue}`;
+	 *     });
+	 *   }
+	 * }
+	 * ```
 	 */
-	static gen<T extends Generator | AsyncGenerator>(fn: () => T) {
-		const it = fn();
-		return Result.handleGenerator(it) as IfGeneratorAsync<
-			T,
-			AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-			Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
-		>;
+	static gen<T extends Generator | AsyncGenerator>(
+		fn: () => T,
+	): IfGeneratorAsync<
+		T,
+		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
+		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+	>;
+	static gen<T extends Generator | AsyncGenerator, This>(
+		self: This,
+		fn: (this: This) => T,
+	): IfGeneratorAsync<
+		T,
+		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
+		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+	>;
+	static gen<T extends Generator | AsyncGenerator>(
+		selfOrFn: unknown,
+		fn?: () => T,
+	) {
+		const it =
+			typeof selfOrFn === "function" ? selfOrFn() : fn?.apply(selfOrFn);
+		return Result.handleGenerator(it);
 	}
 
 	/**
@@ -2026,20 +2056,44 @@ export class Result<Value, Err> {
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
 		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
-	> {
+	>;
+	static genCatching<
+		T extends Generator | AsyncGenerator,
+		This,
+		ErrorType = NativeError,
+	>(
+		self: This,
+		fn: (this: This) => T,
+		transformError?: (error: unknown) => ErrorType,
+	): IfGeneratorAsync<
+		T,
+		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
+		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
+	>;
+	static genCatching(
+		selfOrFn: unknown,
+		transformValueOrError?: Function,
+		transformError?: Function,
+	) {
+		const self = typeof selfOrFn === "function" ? undefined : selfOrFn;
+		const tValue =
+			typeof selfOrFn === "function" ? selfOrFn : transformValueOrError!;
+		const tError =
+			typeof selfOrFn === "function" ? transformValueOrError : transformError;
+
 		try {
-			const it = fn();
+			const it = self ? tValue.apply(selfOrFn) : tValue();
 			const result = Result.handleGenerator(it);
 
 			if (Result.isAsyncResult(result)) {
 				return result.catch((error) =>
-					AsyncResult.error(transformError?.(error) ?? error),
+					AsyncResult.error(tError?.(error) ?? error),
 				) as any;
 			}
 
 			return result as any;
 		} catch (error: unknown) {
-			return Result.error(transformError?.(error) ?? error) as any;
+			return Result.error(tError?.(error) ?? error) as any;
 		}
 	}
 

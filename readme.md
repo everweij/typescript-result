@@ -1455,6 +1455,7 @@ Executes the given `fn` (async) generator function and encapsulates the returned
 This method is often used once as entry point to run a specific flow. The reason for this is that nested generator functions or calls to other functions that return results are supported.
 
 #### Parameters
+- `self` optional `this` context to bind the generator function to.
 - `fn` (async) generator function to execute.
 
 **returns** a new [`AsyncResult`](#asyncresult) or `Result` instance depending on the provided callback fn.
@@ -1468,6 +1469,22 @@ const result = Result.gen(async function* () {
    const arrivalDate = await shipmentService.calculateArrivalDate(order);
    return `Your order has been shipped and is expected to arrive on ${arrivalDate}!`;
 }); // AsyncResult<string, NotFoundError | InvalidOrderStatusError>;
+```
+
+#### Example
+With 'this' context
+
+```ts
+class MyClass {
+  someValue = 12;
+  
+  someMethod() {
+    return Result.gen(this, function* () {
+      const otherValue = yield* Result.ok(8);
+      return `The sum is ${this.someValue + otherValue}`;
+    });
+  }
+}
 ```
 
 ### Result.genCatching()

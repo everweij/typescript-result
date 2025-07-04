@@ -372,6 +372,26 @@ describe("Result", () => {
 			Result.assertError(result);
 			expect(result.error).toBeInstanceOf(CustomError);
 		});
+
+		it("allows you to transform the error before it is returned as a result", () => {
+			function sum(a: number, b: number) {
+				throw new Error("boom");
+
+				// biome-ignore lint/correctness/noUnreachable: needed in order to infer the correct return type
+				return a + b;
+			}
+			const wrappedSum = Result.wrap(
+				sum,
+				(error) => new ErrorA("my message", { cause: error }),
+			);
+			const result = wrappedSum(1, 2);
+
+			Result.assertError(result);
+			expect(result.error).toBeInstanceOf(ErrorA);
+			expect(result.error).toEqual(
+				new ErrorA("my message", { cause: new Error("boom") }),
+			);
+		});
 	});
 
 	describe("Result.allCatching", () => {
@@ -1114,6 +1134,33 @@ describe("Result", () => {
 			Result.assertOk(result);
 			expect(result.value).toBe(42);
 		});
+
+		it("allows you to pass a generator directly", () => {
+			function* generatorFunction(value: number) {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+
+				return a + value;
+			}
+
+			const result = Result.gen(generatorFunction(2));
+
+			expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA>>();
+			Result.assertOk(result);
+			expect(result.value).toBe(3);
+		});
+
+		it("allows you to pass a generator directly that throws", () => {
+			function* generatorFunction(value: number) {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+
+				throw new Error("boom");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				return a + value;
+			}
+
+			expect(() => Result.gen(generatorFunction(2))).toThrow(new Error("boom"));
+		});
 	});
 
 	describe("Result.genCatching", () => {
@@ -1252,6 +1299,56 @@ describe("Result", () => {
 			expectTypeOf(result).toEqualTypeOf<Result<number, Error>>();
 			Result.assertOk(result);
 			expect(result.value).toBe(42);
+		});
+
+		it("allows you to pass a generator directly", () => {
+			function* generatorFunction(value: number) {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+
+				return a + value;
+			}
+
+			const result = Result.genCatching(generatorFunction(2));
+
+			expectTypeOf(result).toEqualTypeOf<Result<number, ErrorA | Error>>();
+			Result.assertOk(result);
+			expect(result.value).toBe(3);
+		});
+
+		it("allows you to pass a generator directly that throws", () => {
+			function* generatorFunction(value: number) {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+
+				throw new Error("boom");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				return a + value;
+			}
+
+			const result = Result.genCatching(generatorFunction(2));
+			Result.assertError(result);
+			expect(result.error).toEqual(new Error("boom"));
+		});
+
+		it("allows you to pass a generator directly that throws and transform the error using a callback", () => {
+			function* generatorFunction(value: number) {
+				const a = yield* Result.ok(1) as Result<number, ErrorA>;
+
+				throw new Error("boom");
+
+				// biome-ignore lint/correctness/noUnreachable: for testing
+				return a + value;
+			}
+
+			const result = Result.genCatching(
+				generatorFunction(2),
+				(error) => new ErrorB("Transformed error", { cause: error }),
+			);
+			Result.assertError(result);
+
+			expect(result.error).toEqual(
+				new ErrorB("Transformed error", { cause: new Error("boom") }),
+			);
 		});
 	});
 

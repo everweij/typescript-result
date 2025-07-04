@@ -801,7 +801,7 @@ const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
     - [Result.isAsyncResult(possibleAsyncResult)](#resultisasyncresultpossibleasyncresult)
     - [Result.all(items)](#resultallitems)
     - [Result.allCatching(items)](#resultallcatchingitems)
-    - [Result.wrap(fn)](#resultwrapfn)
+    - [Result.wrap(fn, [transformErrorFn])](#resultwrapfn-transformerrorfn)
     - [Result.try(fn, [transform])](#resulttryfn-transform)
     - [Result.fromAsync()](#resultfromasync)
     - [Result.fromAsyncCatching()](#resultfromasynccatching)
@@ -1358,7 +1358,7 @@ Similar to [`Result.all`](#resultallitems), but catches any exceptions that migh
 
 **returns** combined result of all the operations.
 
-### Result.wrap(fn)
+### Result.wrap(fn, transformErrorFn?)
 
 Wraps a function and returns a new function that returns a result. Especially useful when you want to work with
 external functions that might throw exceptions.
@@ -1367,6 +1367,7 @@ The returned function will catch any exceptions that might be thrown and encapsu
 #### Parameters
 
 - `fn` function to wrap. Can be synchronous or asynchronous.
+- `transformErrorFn` optional callback function to transform the caught error into a more meaningful error.
 
 **returns** a new function that returns a result.
 
@@ -1455,8 +1456,16 @@ Executes the given `fn` (async) generator function and encapsulates the returned
 This method is often used once as entry point to run a specific flow. The reason for this is that nested generator functions or calls to other functions that return results are supported.
 
 #### Parameters
-- `self` optional `this` context to bind the generator function to.
+- `fn` - (async) generator function to execute.
+
+or
+
+- `self` - 'this' context to bind the generator function to.
 - `fn` (async) generator function to execute.
+
+or
+
+- `generator` - (async) generator to execute.
 
 **returns** a new [`AsyncResult`](#asyncresult) or `Result` instance depending on the provided callback fn.
 
@@ -1493,7 +1502,21 @@ Similar to [`Result.gen()`](#resultgen) this method transforms the given generat
 In addition, it catches any exceptions that might be thrown during any operation and encapsulates them in a failed result.
 
 #### Parameters
+- `fn` - (async) generator function to execute.
+- `transformErrorFn` - optional callback function to transform any caught error into a specific error.
+
+or
+
+- `self` - 'this' context to bind the generator function to.
 - `fn` (async) generator function to execute.
+- `transformErrorFn` - optional callback function to transform any caught error into a specific error.
+
+
+or
+
+- `generator` - (async) generator to execute.
+- `transformErrorFn` - optional callback function to transform any caught error into a specific error.
+
 
 **returns** a new [`AsyncResult`](#asyncresult) or `Result` instance depending on the provided callback fn.
 

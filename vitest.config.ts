@@ -7,7 +7,8 @@ export default defineConfig({
       reporter: ['text'],
       thresholds: {
         "100": true
-      }
+      },
+      include: ["src"]
     }
   }
 })

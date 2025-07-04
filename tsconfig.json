@@ -18,6 +18,9 @@
 		"outDir": "dist",
 		"sourceMap": true,
 		"lib": ["ESNext"],
-		"stripInternal": true
-	}
+		"stripInternal": true,
+		"paths": {
+			"typescript-result": ["./src/index.ts"],
+		}
+	},
 }

@@ -32,6 +32,6 @@
 		"defaultBranch": "main"
 	},
 	"files": {
-		"includes": ["src/**/*"]
+		"includes": ["src/**/*", "examples/**/*"]
 	}
 }

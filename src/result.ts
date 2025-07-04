@@ -135,6 +135,13 @@ export namespace Result {
 		: T extends Result<infer Value, any>
 			? Value
 			: T;
+	export type InferResultFromGenerator<T> = T extends Generator | AsyncGenerator
+		? IfGeneratorAsync<
+				T,
+				AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
+				Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+			>
+		: never;
 }
 
 /**
@@ -1735,17 +1742,22 @@ export class Result<Value, Err> {
 	 * const result = safeDivide(10, 0); // Result<number, Error>
 	 * ```
 	 */
-	static wrap<Fn extends AnyAsyncFunction>(
+	static wrap<Fn extends AnyAsyncFunction, ErrorType = NativeError>(
 		fn: Fn,
+		transformError?: (error: unknown) => ErrorType,
 	): (
 		...args: Parameters<Fn>
-	) => AsyncResult<Awaited<ReturnType<Fn>>, NativeError>;
-	static wrap<Fn extends AnyFunction>(
+	) => AsyncResult<Awaited<ReturnType<Fn>>, ErrorType>;
+	static wrap<Fn extends AnyFunction, ErrorType = NativeError>(
 		fn: Fn,
-	): (...args: Parameters<Fn>) => Result<ReturnType<Fn>, NativeError>;
-	static wrap(fn: AnyFunction | AnyAsyncFunction): AnyFunction {
+		transformError?: (error: unknown) => ErrorType,
+	): (...args: Parameters<Fn>) => Result<ReturnType<Fn>, ErrorType>;
+	static wrap(
+		fn: AnyFunction | AnyAsyncFunction,
+		transformError?: (error: unknown) => AnyValue,
+	): AnyFunction {
 		return function wrapped(...args: any[]) {
-			return Result.try(() => fn(...args));
+			return Result.try(() => fn(...args), transformError!);
 		};
 	}
 
@@ -2033,11 +2045,22 @@ export class Result<Value, Err> {
 		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
 	>;
 	static gen<T extends Generator | AsyncGenerator>(
-		selfOrFn: unknown,
+		generator: T,
+	): IfGeneratorAsync<
+		T,
+		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
+		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+	>;
+	static gen<T extends Generator | AsyncGenerator>(
+		generatorOrSelfOrFn: unknown,
 		fn?: () => T,
 	) {
 		const it =
-			typeof selfOrFn === "function" ? selfOrFn() : fn?.apply(selfOrFn);
+			isGenerator(generatorOrSelfOrFn) || isAsyncGenerator(generatorOrSelfOrFn)
+				? generatorOrSelfOrFn
+				: typeof generatorOrSelfOrFn === "function"
+					? generatorOrSelfOrFn()
+					: fn?.apply(generatorOrSelfOrFn);
 		return Result.handleGenerator(it);
 	}
 
@@ -2046,6 +2069,17 @@ export class Result<Value, Err> {
 	 * depending on whether the generator function contains async operations or not.
 	 * In addition, it catches any exceptions that might be thrown during any operation and encapsulates them in a failed result.
 	 */
+	static genCatching<
+		T extends Generator | AsyncGenerator,
+		ErrorType = NativeError,
+	>(
+		generator: T,
+		transformError?: (error: unknown) => ErrorType,
+	): IfGeneratorAsync<
+		T,
+		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
+		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
+	>;
 	static genCatching<
 		T extends Generator | AsyncGenerator,
 		ErrorType = NativeError,
@@ -2071,18 +2105,32 @@ export class Result<Value, Err> {
 		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
 	>;
 	static genCatching(
-		selfOrFn: unknown,
+		generatorOrSelfOrFn: unknown,
 		transformValueOrError?: Function,
 		transformError?: Function,
 	) {
-		const self = typeof selfOrFn === "function" ? undefined : selfOrFn;
+		const isGen =
+			isGenerator(generatorOrSelfOrFn) || isAsyncGenerator(generatorOrSelfOrFn);
+
+		const self =
+			typeof generatorOrSelfOrFn === "function" || isGen
+				? undefined
+				: generatorOrSelfOrFn;
 		const tValue =
-			typeof selfOrFn === "function" ? selfOrFn : transformValueOrError!;
+			typeof generatorOrSelfOrFn === "function"
+				? generatorOrSelfOrFn
+				: transformValueOrError!;
 		const tError =
-			typeof selfOrFn === "function" ? transformValueOrError : transformError;
+			typeof generatorOrSelfOrFn === "function" || isGen
+				? transformValueOrError
+				: transformError;
 
 		try {
-			const it = self ? tValue.apply(selfOrFn) : tValue();
+			const it = isGen
+				? generatorOrSelfOrFn
+				: self
+					? tValue.apply(generatorOrSelfOrFn)
+					: tValue();
 			const result = Result.handleGenerator(it);
 
 			if (Result.isAsyncResult(result)) {

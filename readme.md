@@ -7,7 +7,7 @@
 [![BUNDLEPHOBIA](https://badgen.net/bundlephobia/minzip/typescript-result)](https://bundlephobia.com/result?p=typescript-result)
 [![Weekly downloads](https://badgen.net/npm/dw/typescript-result)](https://badgen.net/npm/dw/typescript-result)
 
-A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable with full type safety.
+Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code—catching bugs at compile time while making async operations seamless and your code much harder to break.
 
 ## Table of contents
 
@@ -59,8 +59,9 @@ Tested with Node.js version `16` and higher.
 Reading a JSON config file and validating its contents:
 
 ```typescript
-import { Result } from "typescript-result";
 import fs from "node:fs/promises";
+import { Result } from "typescript-result";
+import { s } from "some-schema-validation-library";
 
 class IOError extends Error {
   readonly type = "io-error";
@@ -74,64 +75,67 @@ class ValidationError extends Error {
   readonly type = "validation-error";
 }
 
-function readFile(path: string) {
-  return Result.try(
-    () => fs.readFile(path, "utf-8"),
-    (error) => new IOError(`Unable to read file '${path}'`, { cause: error })
-  );
-}
+const readFile = Result.wrap(
+	(filePath: string) => fs.readFile(filePath, "utf-8"),
+	(error) => new IOError(`Unable to read file`, { cause: error }),
+);
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const parseConfig = Result.wrap(
+	(data: unknown) =>
+		s
+			.object({
+				name: s.string().min(1),
+				version: s.number().int().positive(),
+			})
+			.parse(data),
+	(error) => new ValidationError(`Invalid configuration`, { cause: error }),
+);
 
-const isString = (value: unknown): value is string => typeof value === "string";
+// chaining style:
+const result = await readFile("config.json")
+	.mapCatching(
+		(contents) => JSON.parse(contents),
+		(error) => new ParseError("Unable to parse JSON", { cause: error }),
+	)
+	.map((json) => parseConfig(json));
 
-function getConfig(value: unknown) {
-  if (!isObject(value)) {
-    return Result.error(new ValidationError("Invalid config file"));
-  }
-  if (!value.name || !isString(value.name)) {
-    return Result.error(new ValidationError("Missing or invalid 'name' field"));
-  }
-  if (!value.version || !isString(value.version)) {
-    return Result.error(
-      new ValidationError("Missing or invalid 'version' field")
-    );
-  }
+// generator style:
+const result = await Result.gen(function* () {
+	const contents = yield* readFile("config.json");
 
-  return Result.ok({ name: value.name, version: value.version });
-}
+	const json = yield* Result.try(
+		() => JSON.parse(contents),
+		(error) => new ParseError("Unable to parse JSON", { cause: error }),
+	);
 
-const message = await readFile("./config.json")
-  .mapCatching(
-    (contents) => JSON.parse(contents),
-    (error) => new ParseError("Unable to parse JSON", { cause: error })
-  )
-  .map((json) => getConfig(json))
-  .fold(
-    (config) =>
-      `Successfully read config: name => ${config.name}, version => ${config.version}`,
+	return parseConfig(json);
+});
 
-    (error) => {
-      switch (error.type) {
-        case "io-error":
-          return "Please check if the config file exists and is readable";
-        case "parse-error":
-          return "Please check if the config file contains valid JSON";
-        case "validation-error":
-          return error.message;
-      }
-    }
-  );
+const message = result.fold(
+	(config) =>
+		`Successfully read config: name => ${config.name}, version => ${config.version}`,
+	(error) => {
+		switch (error.type) {
+			case "io-error":
+				return "Please check if the config file exists and is readable";
+			case "parse-error":
+				return "Please check if the config file contains valid JSON";
+			case "validation-error":
+				return error.message;
+		}
+	},
+);
 ```
 
-There's also an example repository available [here](https://github.com/everweij/typescript-result-example) that demonstrates how you could potentially use this library in the context of a web API.
+For more examples, please check out the [examples directory](./examples).
 
 ## Why should you use a result type?
 
 ### Errors as values
 
-The Result type is a product of the ‘error-as-value’ movement, which in turn has its roots in functional programming. When throwing exceptions, all errors are treated equally and behave differently compared to the normal flow of the program. Instead, we like to make a distinction between expected errors and unexpected errors, and make the expected errors part of the normal flow of the program. By explicitly defining that a piece of code can either fail or succeed using the Result type, we can leverage TypeScript's powerful type system to keep track of everything that can go wrong in our code, and let it correct us when we overlook certain scenarios by performing exhaustive checks. This makes our code more type-safe, easier to maintain, and more transparent.
+Instead of throwing exceptions where all errors are treated equally and disrupt your program's flow, the Result type embraces the 'errors-as-values' approach from functional programming. This lets you distinguish between expected errors (like "user not found") and unexpected ones (like system crashes), making expected errors part of your normal program flow.
+
+By explicitly marking code that can succeed or fail with the Result type, TypeScript's type system tracks every possible failure scenario and forces you to handle them—catching bugs at compile time through exhaustive checking. This makes your code more reliable, maintainable, and transparent about what can go wrong.
 
 ### Ergonomic error handling
 
@@ -169,7 +173,7 @@ if (firstAsyncResult.isOk()) {
 You can write:
 
 ```typescript
-const result = await Result.fromAsync(someAsyncFunction1())
+const result = await someAsyncFunction1()
   .map((value) => someAsyncFunction2(value))
   .map((value) => someAsyncFunction3(value))
   .fold(
@@ -250,9 +254,15 @@ function handleOrder(products: Product[], userId: number) {
 }
 ```
 
+### Support for generators
+
+Popularized by [EffectTS](https://effect.website/docs/getting-started/using-generators/), this library supports the use of generator functions to create and work with results. This allows you to write more imperative code that is easier to read and understand, while still benefiting from the type safety and error handling provided by the Result type. You don't have to use the generator syntax - it's fully optional. For more info, see [using generators](#using-generators).
+
 ## Guide
 
 ### A note on errors
+
+> Tldr: Tag your custom errors with a `readonly type` property to avoid TypeScript unifying them into a single `Error` type.
 
 Errors are a fundamental part of the Result type. This library does not have a strong opinion on what your errors should look like; they can be any value, like a string, number, object, etc. Usually though, people tend to use instances of the `Error` class or any custom errors by subclassing the `Error` class.
 
@@ -367,9 +377,30 @@ const safeWriteFile = Result.wrap(fs.writeFileSync);
 const result = safeWriteFile("file.txt", "Hello, World!", "utf-8"); // Result<void, Error>
 ```
 
+#### Using `Result.gen` and `Result.genCatching`
+
+This library also supports the use of generator functions to create and work with results. For more info, see [using generators](#using-generators).
+To give you a feeling of how this works, here's a simple example:
+
+```ts
+const result = Result.gen(function* () {
+  const contents = yield* readFile("file.txt");
+  const json = yield* parseJSON(contents);
+  return parseConfig(json);
+}); // Result<Config, IOError | ParseError | ValidationError>
+```
+
 ### Performing operations on a result
 
-Having a result is one thing, but in many cases, you also want to do something with it. This library provides a set of methods that lets you interact with the instance of a result in various ways.
+Having a result is one thing, but in many cases, you also want to do something with it. This library provides a set of methods and tools that lets you interact with the instance of a result in various ways. We will cover them in depth in the following sections below.
+
+There are two styles of working with results:
+- the more **functional** approach, also known as the [_chaining style_](#chaining-operations)
+- the more **imperative** approach, also known as the [_generator style_](#using-generators)
+
+In a way, the chaining style is similar to how you would _chain_ promises using `.then()`, while the more imperative style is similar to how you would use `async`/`await`. Both styles are equally valid and can be used interchangeably. The choice is mostly a matter of personal preference, but we will try to explain the benefits of each style.
+
+Generally speaking: if you find yourself writing a lot of nested chains (e.g. `map`'s) or you often use loops or conditional logic, you are probably better off using the generator style. On the other hand, if you find yourself writing a lot of simple transformations that can be expressed in a single line, or you simple like the functional style, you are probably better off using the chaining style.
 
 #### Chaining operations
 
@@ -408,7 +439,131 @@ if (result.isOk()) {
 
 The chained version is more concise and makes it easier to follow the flow of the program. Moreover, it allows us to _centralize_ error handling at the end of the flow. This is possible because all transformative operations produce new results which carry over any errors that might have occurred earlier in the chain.
 
-#### Transform: `map`, `mapCatching`, `recover`, `recoverCatching`, `mapError`
+#### Using generators
+
+Generator functions might look unfamiliar at first, but they offer a powerful way to write error-handling code that feels natural and imperative while maintaining all the type safety benefits of Results. The key insight is that with generators, you can write code that looks like normal sequential operations while automatically collecting all possible errors in the background.
+
+**The golden rule**: Use `yield*` for every `Result` or `AsyncResult` operation. This gives you direct access to the success value without manual unwrapping.
+
+Generators shine when you have:
+- **Complex control flow** with conditionals and loops
+- **Nested transformations** that become hard to read with chaining
+
+Let's look at an example by comparing the chaining style with the generator style.
+
+**Chaining vs Generator Style**
+
+Chaining style
+```ts
+declare function fetchTransactionAmount(transactionId: string):
+  AsyncResult<number, UnableToFetchTransactionAmountError>;
+
+declare function fetchDiscountRate(transactionId: string):
+  AsyncResult<number, UnableToFetchDiscountRateError>;
+
+function applyDiscount(total: number, discountRate: number) {
+  if (discountRate === 0) {
+    return Result.error(new InvalidDiscountRateError("Discount rate cannot be zero"));
+  }
+
+  return Result.ok(total * (1 - discountRate));
+}
+
+function getDiscountedPrice(transactionId: string) {
+	return fetchTransactionAmount(transactionId)
+		.map((amount) =>
+			fetchDiscountRate()
+				.recover(() => 0.1) // Default discount rate if fetching fails
+				.map((discountRate) => applyDiscount(amount, discountRate)),
+		)
+		.map((finalAmount) => `Final amount to charge: ${finalAmount}`);
+}
+```
+
+Generator style
+```ts
+declare function fetchTransactionAmount(transactionId: string):
+  AsyncResult<number, UnableToFetchTransactionAmountError>;
+
+declare function fetchDiscountRate(transactionId: string):
+  AsyncResult<number, UnableToFetchDiscountRateError>;
+
+function* applyDiscount(total: number, discountRate: number) {
+  if (discountRate === 0) {
+    return yield* Result.error(new InvalidDiscountRateError("Discount rate cannot be zero"));
+  }
+
+  return total * (1 - discountRate);
+}
+
+function* getDiscountedPrice(transactionId: string) {
+  const amount = yield* fetchTransactionAmount(transactionId);
+
+  const discountRate = yield* fetchDiscountRate(transactionId)
+    .recover(() => 0.1); // Default discount rate if fetching fails
+
+  const finalAmount = yield* applyDiscount(amount, discountRate);
+
+  return `Final amount to charge: ${finalAmount}`;
+}
+
+// Usage
+const result = Result.gen(getPrice("transaction-123"));
+// AsyncResult<
+//   string, 
+//   UnableToFetchTransactionAmountError | UnableToFetchDiscountRateError | InvalidDiscountRateError
+// >
+```
+
+As you can see, the generator style reads more linear and is therefore easier to follow. This example also shows how you can not only yield (functions that return) `Result` or `AsyncResult`, but also nest logic in other generator functions as well.
+
+**Async generators functions**
+
+If you want to perform asynchronous operations inside a generator function, you can use a `async function*` callback:
+
+```ts
+const result = Result.gen(async function* () {
+  const valueA = yield* someFn();
+
+  const valueB = await someAsyncFn(valueA);
+
+  return valueB;
+}); // AsyncResult
+```
+
+**Mixing styles**
+
+You can combine generators with method chaining when it makes sense:
+
+```ts
+const result = Result.ok(12)
+  .map(function* (value) {
+    const doubled = yield* someOperation(value);
+    const tripled = yield* anotherOperation(doubled); 
+    return tripled;
+  })
+  .map(finalValue => `Result: ${finalValue}`);
+```
+
+**'This' context**
+
+If you need access to the `this` context inside a generator function, you can use the overload of `Result.gen` or `Result.genCatching` by providing `this` is the first argument:
+
+```ts
+class OrderProcessor {
+  private tax = 0.08;
+  
+  processOrder(orderId: string) {
+    return Result.gen(this, function* () {
+      const order = yield* this.fetchOrder(orderId);
+      const subtotal = yield* this.calculateSubtotal(order);
+      return subtotal * (1 + this.tax);
+    });
+  }
+}
+```
+
+#### Transform values and errors: `map`, `mapCatching`, `recover`, `recoverCatching`, `mapError`
 
 Both [`map`](#maptransformfn) and [`recover`](#recoveronfailure) behave very similar in the sense that they transform a result using function provided by the user into a new result. The main difference is that `map` is used to transform a successful result, while `recover` is used to transform a failed result.
 

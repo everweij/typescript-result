@@ -76,54 +76,54 @@ class ValidationError extends Error {
 }
 
 const readFile = Result.wrap(
-	(filePath: string) => fs.readFile(filePath, "utf-8"),
-	(error) => new IOError(`Unable to read file`, { cause: error }),
+  (filePath: string) => fs.readFile(filePath, "utf-8"),
+  (error) => new IOError(`Unable to read file`, { cause: error }),
 );
 
 const parseConfig = Result.wrap(
-	(data: unknown) =>
-		s
-			.object({
-				name: s.string().min(1),
-				version: s.number().int().positive(),
-			})
-			.parse(data),
-	(error) => new ValidationError(`Invalid configuration`, { cause: error }),
+  (data: unknown) =>
+    s
+      .object({
+        name: s.string().min(1),
+        version: s.number().int().positive(),
+      })
+      .parse(data),
+  (error) => new ValidationError(`Invalid configuration`, { cause: error }),
 );
 
 // chaining style:
 const result = await readFile("config.json")
-	.mapCatching(
-		(contents) => JSON.parse(contents),
-		(error) => new ParseError("Unable to parse JSON", { cause: error }),
-	)
-	.map((json) => parseConfig(json));
+  .mapCatching(
+    (contents) => JSON.parse(contents),
+    (error) => new ParseError("Unable to parse JSON", { cause: error }),
+  )
+  .map((json) => parseConfig(json));
 
 // generator style:
 const result = await Result.gen(function* () {
-	const contents = yield* readFile("config.json");
+  const contents = yield* readFile("config.json");
 
-	const json = yield* Result.try(
-		() => JSON.parse(contents),
-		(error) => new ParseError("Unable to parse JSON", { cause: error }),
-	);
+  const json = yield* Result.try(
+    () => JSON.parse(contents),
+    (error) => new ParseError("Unable to parse JSON", { cause: error }),
+  );
 
-	return parseConfig(json);
+  return parseConfig(json);
 });
 
 const message = result.fold(
-	(config) =>
-		`Successfully read config: name => ${config.name}, version => ${config.version}`,
-	(error) => {
-		switch (error.type) {
-			case "io-error":
-				return "Please check if the config file exists and is readable";
-			case "parse-error":
-				return "Please check if the config file contains valid JSON";
-			case "validation-error":
-				return error.message;
-		}
-	},
+  (config) =>
+  `Successfully read config: name => ${config.name}, version => ${config.version}`,
+  (error) => {
+    switch (error.type) {
+      case "io-error":
+        return "Please check if the config file exists and is readable";
+      case "parse-error":
+        return "Please check if the config file contains valid JSON";
+      case "validation-error":
+        return error.message;
+    }
+  },
 );
 ```
 
@@ -470,13 +470,13 @@ function applyDiscount(total: number, discountRate: number) {
 }
 
 function getDiscountedPrice(transactionId: string) {
-	return fetchTransactionAmount(transactionId)
-		.map((amount) =>
-			fetchDiscountRate()
-				.recover(() => 0.1) // Default discount rate if fetching fails
-				.map((discountRate) => applyDiscount(amount, discountRate)),
-		)
-		.map((finalAmount) => `Final amount to charge: ${finalAmount}`);
+  return fetchTransactionAmount(transactionId)
+    .map((amount) =>
+      fetchDiscountRate()
+        .recover(() => 0.1) // Default discount rate if fetching fails
+        .map((discountRate) => applyDiscount(amount, discountRate)),
+    )
+    .map((finalAmount) => `Final amount to charge: ${finalAmount}`);
 }
 ```
 

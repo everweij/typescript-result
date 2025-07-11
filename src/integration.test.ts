@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assertUnreachable } from "./helpers.js";
-import { Result } from "./result.js";
+import { Result } from "./index.js";
 
 describe("User management app", () => {
 	let count = 0;

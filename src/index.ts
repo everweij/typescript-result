@@ -5,7 +5,8 @@ import {
 	type IfGeneratorAsync,
 	type InferGeneratorError,
 	type InferGeneratorReturn,
-	Result as ResultBase,
+	type Result as ResultBase,
+	ResultFactory,
 } from "./result.js";
 
 export { AsyncResult } from "./result.js";
@@ -36,38 +37,4 @@ export type Result<Value, Err> =
 	| ([Value] extends [never] ? never : Result.Ok<Value>)
 	| ([Err] extends [never] ? never : Result.Error<Err>);
 
-export const Result: {
-	ok: typeof ResultBase.ok;
-	error: typeof ResultBase.error;
-	assertOk: typeof ResultBase.assertOk;
-	assertError: typeof ResultBase.assertError;
-	isResult: typeof ResultBase.isResult;
-	isAsyncResult: typeof ResultBase.isAsyncResult;
-	all: typeof ResultBase.all;
-	allCatching: typeof ResultBase.allCatching;
-	wrap: typeof ResultBase.wrap;
-	try: typeof ResultBase.try;
-	fromAsync: typeof ResultBase.fromAsync;
-	fromAsyncCatching: typeof ResultBase.fromAsyncCatching;
-	gen: typeof ResultBase.gen;
-	genCatching: typeof ResultBase.genCatching;
-	[Symbol.hasInstance]: (instance: unknown) => boolean;
-} = {
-	ok: ResultBase.ok,
-	error: ResultBase.error,
-	isResult: ResultBase.isResult,
-	isAsyncResult: ResultBase.isAsyncResult,
-	all: ResultBase.all,
-	allCatching: ResultBase.allCatching,
-	wrap: ResultBase.wrap,
-	try: ResultBase.try,
-	fromAsync: ResultBase.fromAsync,
-	fromAsyncCatching: ResultBase.fromAsyncCatching,
-	gen: ResultBase.gen,
-	genCatching: ResultBase.genCatching,
-	assertOk: ResultBase.assertOk,
-	assertError: ResultBase.assertError,
-	[Symbol.hasInstance](instance: unknown) {
-		return instance instanceof ResultBase;
-	},
-};
+export const Result: typeof ResultFactory = ResultFactory;

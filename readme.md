@@ -1421,7 +1421,7 @@ Creates a new result instance that represents a successful outcome.
 
 #### Example
 ```ts
-const result = Result.ok(42); // Result<number, never>
+const result = Result.ok(42); // Result.Ok<number>
 ```
 
 ### Result.error(error)
@@ -1436,7 +1436,7 @@ Creates a new result instance that represents a failed outcome.
 
 #### Example
 ```ts
-const result = Result.error(new NotFoundError()); // Result<never, NotFoundError>
+const result = Result.error(new NotFoundError()); // Result.Error<NotFoundError>
 ```
 
 ### Result.isResult(possibleResult)

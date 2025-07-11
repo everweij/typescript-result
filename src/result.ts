@@ -525,7 +525,9 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 				.catch((error: unknown) => {
 					try {
 						resolve(
-							Result.error(transformError ? transformError(error) : error),
+							ResultFactory.error(
+								transformError ? transformError(error) : error,
+							),
 						);
 					} catch (err) {
 						reject(err);
@@ -697,7 +699,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 */
 	static error<Error>(error: Error): AsyncResult<never, Error> {
 		return new AsyncResult((resolve) =>
-			resolve(Result.error(error) as OuterResult<never, Error>),
+			resolve(ResultFactory.error(error) as OuterResult<never, Error>),
 		);
 	}
 
@@ -706,7 +708,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 */
 	static ok<Value>(value: Value): AsyncResult<Value, never> {
 		return new AsyncResult((resolve) =>
-			resolve(Result.ok(value) as OuterResult<Value, never>),
+			resolve(ResultFactory.ok(value) as OuterResult<Value, never>),
 		);
 	}
 
@@ -717,7 +719,9 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		return new AsyncResult((resolve, reject) => {
 			promise
 				.then((value) =>
-					resolve(Result.isResult(value) ? value : Result.ok(value)),
+					resolve(
+						ResultFactory.isResult(value) ? value : ResultFactory.ok(value),
+					),
 				)
 				.catch(reject);
 		});
@@ -733,10 +737,12 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		return new AsyncResult((resolve) => {
 			promise
 				.then((value) =>
-					resolve(Result.isResult(value) ? value : Result.ok(value)),
+					resolve(
+						ResultFactory.isResult(value) ? value : ResultFactory.ok(value),
+					),
 				)
 				.catch((caughtError) => {
-					resolve(Result.error(transform?.(caughtError) ?? caughtError));
+					resolve(ResultFactory.error(transform?.(caughtError) ?? caughtError));
 				});
 		});
 	}
@@ -1087,7 +1093,7 @@ export class Result<Value, Err> {
 			if (isAsync) {
 				return new AsyncResult((resolve) => {
 					(outcome as AnyPromise).then(() =>
-						resolve(Result.error(this._error)),
+						resolve(ResultFactory.error(this._error)),
 					);
 				}) as any;
 			}
@@ -1142,7 +1148,9 @@ export class Result<Value, Err> {
 			const outcome = action(this._value);
 			if (isAsync) {
 				return new AsyncResult((resolve) => {
-					(outcome as AnyPromise).then(() => resolve(Result.ok(this._value)));
+					(outcome as AnyPromise).then(() =>
+						resolve(ResultFactory.ok(this._value)),
+					);
 				});
 			}
 
@@ -1220,7 +1228,7 @@ export class Result<Value, Err> {
 	) {
 		return (
 			this.success
-				? Result.run(() => transform(this._value))
+				? ResultFactory.run(() => transform(this._value))
 				: isAsyncFn(transform)
 					? AsyncResult.error(this._error)
 					: this
@@ -1272,7 +1280,7 @@ export class Result<Value, Err> {
 		transformError?: (err: unknown) => ErrorType,
 	) {
 		return (this.success
-			? Result.try(
+			? ResultFactory.try(
 					() => transformValue(this._value),
 					transformError as AnyFunction,
 				)
@@ -1334,7 +1342,7 @@ export class Result<Value, Err> {
 			return this as unknown as OuterResult<InferValue<This>, NewError>;
 		}
 
-		return Result.error(transform(this._error)) as OuterResult<
+		return ResultFactory.error(transform(this._error)) as OuterResult<
 			InferValue<This>,
 			NewError
 		>;
@@ -1377,7 +1385,7 @@ export class Result<Value, Err> {
 				? isAsyncFn(onFailure)
 					? AsyncResult.ok(this._value)
 					: this
-				: Result.run(() => onFailure(this._error))
+				: ResultFactory.run(() => onFailure(this._error))
 		) as [ReturnType] extends [Generator | AsyncGenerator]
 			? IfGeneratorAsync<
 					ReturnType,
@@ -1430,7 +1438,7 @@ export class Result<Value, Err> {
 				? isAsyncFn(onFailure)
 					? AsyncResult.ok(this._value)
 					: this
-				: Result.try(
+				: ResultFactory.try(
 						() => onFailure(this._error),
 						transformError as AnyFunction,
 					)
@@ -1480,7 +1488,9 @@ export class Result<Value, Err> {
 
 		return `Result.error(${this.error})`;
 	}
+}
 
+export class ResultFactory {
 	/**
 	 * Creates a new result instance that represents a successful outcome.
 	 *
@@ -1489,7 +1499,7 @@ export class Result<Value, Err> {
 	 *
 	 * @example
 	 * ```ts
-	 * const result = Result.ok(42); // Result<number, never>
+	 * const result = Result.ok(42); // Result.Ok<number>
 	 * ```
 	 */
 	static ok(): OuterResult.Ok<void>;
@@ -1506,7 +1516,7 @@ export class Result<Value, Err> {
 	 *
 	 * @example
 	 * ```ts
-	 * const result = Result.error(new NotFoundError()); // Result<never, NotFoundError>
+	 * const result = Result.error(new NotFoundError()); // Result.Error<NotFoundError>
 	 * ```
 	 */
 	static error<Err>(error: Err): OuterResult.Error<Err> {
@@ -1535,25 +1545,33 @@ export class Result<Value, Err> {
 		return possibleAsyncResult instanceof AsyncResult;
 	}
 
-	private static run(fn: AnyFunction): AnyResult | AnyAsyncResult {
+	/**
+	 * @internal
+	 */
+	static run(fn: AnyFunction): AnyResult | AnyAsyncResult {
 		const returnValue = fn();
 
 		if (isGenerator(returnValue) || isAsyncGenerator(returnValue)) {
-			return Result.handleGenerator(returnValue);
+			return ResultFactory.handleGenerator(returnValue);
 		}
 
 		if (isPromise(returnValue)) {
 			return AsyncResult.fromPromise(returnValue);
 		}
 
-		return Result.isResult(returnValue) ? returnValue : Result.ok(returnValue);
+		return ResultFactory.isResult(returnValue)
+			? returnValue
+			: ResultFactory.ok(returnValue);
 	}
 
-	private static allInternal(
+	/**
+	 * @internal
+	 */
+	static allInternal(
 		items: any[],
 		opts: { catching: boolean },
 	): AnyResult | AnyAsyncResult {
-		const runner = opts.catching ? Result.try : Result.run;
+		const runner = opts.catching ? ResultFactory.try : ResultFactory.run;
 
 		const flattened: Array<AnyResult | AnyAsyncResult> = [];
 
@@ -1568,19 +1586,19 @@ export class Result<Value, Err> {
 
 				const returnValue = runner(item as AnyFunction);
 
-				if (Result.isResult(returnValue) && returnValue.isError()) {
+				if (ResultFactory.isResult(returnValue) && returnValue.isError()) {
 					hasFailure = true;
 					if (!isAsync) {
 						return returnValue;
 					}
 				}
 
-				if (Result.isAsyncResult(returnValue)) {
+				if (ResultFactory.isAsyncResult(returnValue)) {
 					isAsync = true;
 				}
 
 				flattened.push(returnValue);
-			} else if (Result.isResult(item)) {
+			} else if (ResultFactory.isResult(item)) {
 				if (item.isError()) {
 					hasFailure = true;
 					if (!isAsync) {
@@ -1589,7 +1607,7 @@ export class Result<Value, Err> {
 				}
 
 				flattened.push(item);
-			} else if (Result.isAsyncResult(item)) {
+			} else if (ResultFactory.isAsyncResult(item)) {
 				isAsync = true;
 				flattened.push(item);
 			} else if (isPromise(item)) {
@@ -1601,7 +1619,7 @@ export class Result<Value, Err> {
 						: AsyncResult.fromPromise(item),
 				);
 			} else {
-				flattened.push(Result.ok(item));
+				flattened.push(ResultFactory.ok(item));
 			}
 		}
 
@@ -1612,7 +1630,7 @@ export class Result<Value, Err> {
 
 				for (let i = 0; i < flattened.length; i++) {
 					const item = flattened[i];
-					if (Result.isAsyncResult(item)) {
+					if (ResultFactory.isAsyncResult(item)) {
 						asyncResults.push(item);
 						asyncIndexes.push(i);
 					}
@@ -1633,7 +1651,9 @@ export class Result<Value, Err> {
 							return;
 						}
 
-						resolve(Result.ok(merged.map((result) => result.getOrNull())));
+						resolve(
+							ResultFactory.ok(merged.map((result) => result.getOrNull())),
+						);
 					})
 					.catch((reason) => {
 						// note: this should only happen when opts.catching is false
@@ -1642,7 +1662,7 @@ export class Result<Value, Err> {
 			});
 		}
 
-		return Result.ok(
+		return ResultFactory.ok(
 			(flattened as AnyResult[]).map((result) => result.getOrNull()),
 		);
 	}
@@ -1692,7 +1712,7 @@ export class Result<Value, Err> {
 	static all<Items extends any[], Unwrapped extends any[] = UnwrapList<Items>>(
 		...items: Items
 	) {
-		return Result.allInternal(items, {
+		return ResultFactory.allInternal(items, {
 			catching: false,
 		}) as ListContainsAsync<Items> extends true
 			? AsyncResult<ExtractValues<Unwrapped>, ExtractErrors<Unwrapped>[number]>
@@ -1708,7 +1728,7 @@ export class Result<Value, Err> {
 		Items extends any[],
 		Unwrapped extends any[] = UnwrapList<Items>,
 	>(...items: Items) {
-		return Result.allInternal(items, {
+		return ResultFactory.allInternal(items, {
 			catching: true,
 		}) as ListContainsAsync<Items> extends true
 			? AsyncResult<
@@ -1753,7 +1773,7 @@ export class Result<Value, Err> {
 		transformError?: (error: unknown) => AnyValue,
 	): AnyFunction {
 		return function wrapped(...args: any[]) {
-			return Result.try(() => fn(...args), transformError!);
+			return ResultFactory.try(() => fn(...args), transformError!);
 		};
 	}
 
@@ -1828,11 +1848,11 @@ export class Result<Value, Err> {
 			const returnValue = fn();
 
 			if (isGenerator(returnValue)) {
-				return Result.handleGenerator(returnValue);
+				return ResultFactory.handleGenerator(returnValue);
 			}
 
 			if (isAsyncGenerator(returnValue)) {
-				const asyncResult = Result.handleGenerator(
+				const asyncResult = ResultFactory.handleGenerator(
 					returnValue,
 				) as AnyAsyncResult;
 				return AsyncResult.fromPromiseCatching(asyncResult, transform);
@@ -1842,11 +1862,11 @@ export class Result<Value, Err> {
 				return AsyncResult.fromPromiseCatching(returnValue, transform);
 			}
 
-			return Result.isResult(returnValue)
+			return ResultFactory.isResult(returnValue)
 				? returnValue
-				: Result.ok(returnValue);
+				: ResultFactory.ok(returnValue);
 		} catch (caughtError: unknown) {
-			return Result.error(transform?.(caughtError) ?? caughtError);
+			return ResultFactory.error(transform?.(caughtError) ?? caughtError);
 		}
 	}
 
@@ -1916,7 +1936,7 @@ export class Result<Value, Err> {
 		value: Promise<T>,
 	): AsyncResult<ExtractValue<T>, ExtractError<T>>;
 	static fromAsync(valueOrFn: AnyPromise | AnyAsyncFunction) {
-		return Result.run(
+		return ResultFactory.run(
 			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
 		);
 	}
@@ -1941,7 +1961,7 @@ export class Result<Value, Err> {
 		valueOrFn: AnyPromise | AnyAsyncFunction,
 		transformError?: (err: unknown) => any,
 	) {
-		return Result.try(
+		return ResultFactory.try(
 			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
 			transformError as AnyFunction,
 		);
@@ -1964,7 +1984,7 @@ export class Result<Value, Err> {
 					return step.value;
 				}
 
-				return Result.ok(step.value);
+				return ResultFactory.ok(step.value);
 			}
 
 			if (step.value instanceof Result) {
@@ -2059,7 +2079,7 @@ export class Result<Value, Err> {
 				: typeof generatorOrSelfOrFn === "function"
 					? generatorOrSelfOrFn()
 					: fn?.apply(generatorOrSelfOrFn);
-		return Result.handleGenerator(it);
+		return ResultFactory.handleGenerator(it);
 	}
 
 	/**
@@ -2129,9 +2149,9 @@ export class Result<Value, Err> {
 				: self
 					? tValue.apply(generatorOrSelfOrFn)
 					: tValue();
-			const result = Result.handleGenerator(it);
+			const result = ResultFactory.handleGenerator(it);
 
-			if (Result.isAsyncResult(result)) {
+			if (ResultFactory.isAsyncResult(result)) {
 				return result.catch((error) =>
 					AsyncResult.error(tError?.(error) ?? error),
 				) as any;
@@ -2139,7 +2159,7 @@ export class Result<Value, Err> {
 
 			return result as any;
 		} catch (error: unknown) {
-			return Result.error(tError?.(error) ?? error) as any;
+			return ResultFactory.error(tError?.(error) ?? error) as any;
 		}
 	}
 
@@ -2169,5 +2189,12 @@ export class Result<Value, Err> {
 		if (result.isOk()) {
 			throw new Error("Expected a failed result, but got a value instead");
 		}
+	}
+
+	/**
+	 * @internal
+	 */
+	static [Symbol.hasInstance](instance: unknown): boolean {
+		return instance instanceof Result;
 	}
 }

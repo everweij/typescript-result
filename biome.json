@@ -15,7 +15,8 @@
 				"noExplicitAny": "off"
 			},
 			"complexity": {
-				"noBannedTypes": "off"
+				"noBannedTypes": "off",
+				"noStaticOnlyClass": "off"
 			},
 			"correctness": {
 				"useYield": "off"

@@ -1,8 +1,8 @@
 {
 	"private": false,
 	"name": "typescript-result",
-	"version": "3.4.0-beta.1",
-	"description": "A Result type inspired by Rust and Kotlin that leverages TypeScript's powerful type system to simplify error handling and make your code more readable and maintainable.",
+	"version": "3.4.0-beta.2",
+	"description": "Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code.",
 	"keywords": [
 		"result",
 		"type",
@@ -13,7 +13,9 @@
 		"exception",
 		"ok",
 		"success",
-		"failure"
+		"failure",
+		"Rust",
+		"functional programming"
 	],
 	"author": {
 		"name": "Erik Verweij",

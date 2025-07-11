@@ -13,6 +13,7 @@ import {
 	isGenerator,
 	isPromise,
 } from "./helpers.js";
+import type { Result as OuterResult } from "./index.js";
 
 type InferError<T> = T extends AsyncResult<any, infer Error>
 	? Error
@@ -26,6 +27,7 @@ type InferValue<T> = T extends AsyncResult<infer Value, any>
 		: T;
 
 type AnyResult = Result<any, any>;
+type AnyOuterResult = OuterResult<any, any>;
 type AnyAsyncResult = AsyncResult<any, any>;
 
 type ReturningValue<T> =
@@ -71,10 +73,14 @@ type ErrorOr<Value, Err, Or> = [Value] extends [never]
 type SyncOrAsyncGenerator<Y, R, N> =
 	| Generator<Y, R, N>
 	| AsyncGenerator<Y, R, N>;
-type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<any, infer R, any>
+export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
+	any,
+	infer R,
+	any
+>
 	? ExtractValue<R>
 	: never;
-type InferGeneratorError<T> = [T] extends [
+export type InferGeneratorError<T> = [T] extends [
 	SyncOrAsyncGenerator<never, infer R, any>,
 ]
 	? InferError<R>
@@ -96,7 +102,9 @@ type IsGeneratorAsync<T> = T extends SyncOrAsyncGenerator<
 				: false
 	: false;
 
-type IfGeneratorAsync<T, Yes, No> = IsGeneratorAsync<T> extends true ? Yes : No;
+export type IfGeneratorAsync<T, Yes, No> = IsGeneratorAsync<T> extends true
+	? Yes
+	: No;
 
 type UnwrapList<T extends any[]> = {
 	[I in keyof T]: T[I] extends AnyFunction<infer U> ? U : T[I];
@@ -122,32 +130,10 @@ type AccountForThrowing<T extends any[]> = {
 	? never
 	: NativeError;
 
-export namespace Result {
-	export type Error<E> = Result<never, E>;
-	export type Ok<V> = Result<V, never>;
-	export type InferError<T> = T extends AsyncResult<any, infer Error>
-		? Error
-		: T extends Result<any, infer Error>
-			? Error
-			: never;
-	export type InferValue<T> = T extends AsyncResult<infer Value, any>
-		? Value
-		: T extends Result<infer Value, any>
-			? Value
-			: T;
-	export type InferResultFromGenerator<T> = T extends Generator | AsyncGenerator
-		? IfGeneratorAsync<
-				T,
-				AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-				Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
-			>
-		: never;
-}
-
 /**
  * Represents the asynchronous outcome of an operation that can either succeed or fail.
  */
-export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
+export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	/**
 	 * Utility getter to infer the value type of the result.
 	 * Note: this getter does not hold any value, it's only used for type inference.
@@ -198,7 +184,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 				? [value: never, error: Err]
 				: [value: Value, error: null] | [value: null, error: Err]
 	> {
-		const result = await this;
+		const result = (await this) as Result<Value, Err>;
 		return result.toTuple();
 	}
 
@@ -375,7 +361,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 						if (result.isError()) {
 							await action(result.error as InferError<This>);
 						}
-						resolve(result);
+						resolve(result as OuterResult<InferValue<This>, InferError<This>>);
 					} catch (e) {
 						reject(e);
 					}
@@ -423,7 +409,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 						if (result.isOk()) {
 							await action(result.value as InferValue<This>);
 						}
-						resolve(result);
+						resolve(result as OuterResult<InferValue<This>, InferError<This>>);
 					} catch (error) {
 						reject(error);
 					}
@@ -535,7 +521,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	) {
 		return new AsyncResult<any, any>((resolve, reject) => {
 			this.map(transformValue)
-				.then((result: AnyResult) => resolve(result))
+				.then((result) => resolve(result as AnyOuterResult))
 				.catch((error: unknown) => {
 					try {
 						resolve(
@@ -587,7 +573,12 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 		return new AsyncResult<InferValue<This>, NewError>((resolve, reject) =>
 			this.then(async (result) => {
 				try {
-					resolve(result.mapError(transform));
+					resolve(
+						result.mapError(transform) as OuterResult<
+							InferValue<This>,
+							NewError
+						>,
+					);
 				} catch (error) {
 					reject(error);
 				}
@@ -672,7 +663,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
-				resolve(result.recoverCatching(onFailure, transformError));
+				resolve(result.recoverCatching(onFailure, transformError) as any);
 			}).catch(reject),
 		) as [ReturnType] extends [Generator | AsyncGenerator]
 			? AsyncResult<
@@ -705,14 +696,18 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
 	 * @internal
 	 */
 	static error<Error>(error: Error): AsyncResult<never, Error> {
-		return new AsyncResult((resolve) => resolve(Result.error(error)));
+		return new AsyncResult((resolve) =>
+			resolve(Result.error(error) as OuterResult<never, Error>),
+		);
 	}
 
 	/**
 	 * @internal
 	 */
 	static ok<Value>(value: Value): AsyncResult<Value, never> {
-		return new AsyncResult((resolve) => resolve(Result.ok(value)));
+		return new AsyncResult((resolve) =>
+			resolve(Result.ok(value) as OuterResult<Value, never>),
+		);
 	}
 
 	/**
@@ -751,7 +746,7 @@ export class AsyncResult<Value, Err> extends Promise<Result<Value, Err>> {
  * Represents the outcome of an operation that can either succeed or fail.
  */
 export class Result<Value, Err> {
-	private constructor(
+	constructor(
 		private readonly _value: Value,
 		private readonly _error: Err,
 	) {}
@@ -804,8 +799,8 @@ export class Result<Value, Err> {
 	 * }
 	 * ```
 	 */
-	get value(): ValueOr<Value, Err, undefined> {
-		return this._value as any;
+	get value() {
+		return this._value as ValueOr<Value, Err, undefined>;
 	}
 
 	/**
@@ -834,8 +829,8 @@ export class Result<Value, Err> {
 	 * }
 	 * ```
 	 */
-	get error(): ErrorOr<Value, Err, undefined> {
-		return this._error as any;
+	get error() {
+		return this._error as ErrorOr<Value, Err, undefined>;
 	}
 
 	private get success() {
@@ -861,7 +856,7 @@ export class Result<Value, Err> {
 	 * }
 	 * ```
 	 */
-	isOk(): this is Result<[Value] extends [never] ? AnyValue : Value, never> {
+	isOk(): this is [Value] extends [never] ? never : OuterResult.Ok<Value> {
 		return this.success;
 	}
 
@@ -880,7 +875,7 @@ export class Result<Value, Err> {
 	 * }
 	 * ```
 	 */
-	isError(): this is Result<never, [Err] extends [never] ? AnyValue : Err> {
+	isError(): this is [Err] extends [never] ? never : OuterResult.Error<Err> {
 		return this.failure;
 	}
 
@@ -978,9 +973,9 @@ export class Result<Value, Err> {
 		onFailure: (error: InferError<This>) => Else,
 	): Else extends Promise<infer U> ? Promise<Value | U> : Value | Else {
 		if (isAsyncFn(onFailure)) {
-			return this.success
-				? (Promise.resolve(this._value) as any)
-				: (onFailure(this._error) as any);
+			return (
+				this.success ? Promise.resolve(this._value) : onFailure(this._error)
+			) as any;
 		}
 
 		return this.success ? this._value : (onFailure(this._error) as any);
@@ -1084,7 +1079,7 @@ export class Result<Value, Err> {
 		action: (error: Err) => ReturnValue,
 	): ReturnValue extends AnyPromise
 		? AsyncResult<InferValue<This>, InferError<This>>
-		: Result<InferValue<This>, InferError<This>> {
+		: OuterResult<InferValue<This>, InferError<This>> {
 		const isAsync = isAsyncFn(action);
 
 		if (this.failure) {
@@ -1100,7 +1095,7 @@ export class Result<Value, Err> {
 			return this as any;
 		}
 
-		return isAsync ? (AsyncResult.ok(this._value) as any) : (this as any);
+		return (isAsync ? AsyncResult.ok(this._value) : this) as any;
 	}
 
 	/**
@@ -1139,7 +1134,7 @@ export class Result<Value, Err> {
 	onSuccess<This extends AnyResult>(
 		this: This,
 		action: (value: InferValue<This>) => void,
-	): Result<InferValue<This>, InferError<This>>;
+	): OuterResult<InferValue<This>, InferError<This>>;
 	onSuccess(action: (value: Value) => unknown): unknown {
 		const isAsync = isAsyncFn(action);
 
@@ -1236,7 +1231,7 @@ export class Result<Value, Err> {
 						InferGeneratorReturn<ReturnType>,
 						InferGeneratorError<ReturnType> | InferError<This>
 					>,
-					Result<
+					OuterResult<
 						InferGeneratorReturn<ReturnType>,
 						InferGeneratorError<ReturnType> | InferError<This>
 					>
@@ -1251,7 +1246,7 @@ export class Result<Value, Err> {
 							? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
 							: never,
 						ReturnType extends U
-							? Result<ExtractValue<U>, InferError<This> | ExtractError<U>>
+							? OuterResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
 							: never
 					>;
 	}
@@ -1276,21 +1271,19 @@ export class Result<Value, Err> {
 		transformValue: (value: InferValue<This>) => ReturnType,
 		transformError?: (err: unknown) => ErrorType,
 	) {
-		return (
-			this.success
-				? Result.try(
-						() => transformValue(this._value),
-						transformError as AnyFunction,
-					)
-				: this
-		) as [ReturnType] extends [Generator | AsyncGenerator]
+		return (this.success
+			? Result.try(
+					() => transformValue(this._value),
+					transformError as AnyFunction,
+				)
+			: this) as unknown as [ReturnType] extends [Generator | AsyncGenerator]
 			? IfGeneratorAsync<
 					ReturnType,
 					AsyncResult<
 						InferGeneratorReturn<ReturnType>,
 						InferGeneratorError<ReturnType> | InferError<This> | ErrorType
 					>,
-					Result<
+					OuterResult<
 						InferGeneratorReturn<ReturnType>,
 						InferGeneratorError<ReturnType> | InferError<This> | ErrorType
 					>
@@ -1311,7 +1304,7 @@ export class Result<Value, Err> {
 								>
 							: never,
 						ReturnType extends U
-							? Result<
+							? OuterResult<
 									ExtractValue<U>,
 									InferError<This> | ExtractError<U> | ErrorType
 								>
@@ -1336,12 +1329,15 @@ export class Result<Value, Err> {
 	mapError<This extends AnyResult, NewError>(
 		this: This,
 		transform: (error: InferError<This>) => NewError,
-	): Result<InferValue<This>, NewError> {
+	): OuterResult<InferValue<This>, NewError> {
 		if (this.success) {
-			return this as Result<InferValue<This>, any>;
+			return this as unknown as OuterResult<InferValue<This>, NewError>;
 		}
 
-		return Result.error(transform(this._error));
+		return Result.error(transform(this._error)) as OuterResult<
+			InferValue<This>,
+			NewError
+		>;
 	}
 
 	/**
@@ -1389,7 +1385,7 @@ export class Result<Value, Err> {
 						InferGeneratorReturn<ReturnType> | InferValue<This>,
 						InferGeneratorError<ReturnType>
 					>,
-					Result<
+					OuterResult<
 						InferGeneratorReturn<ReturnType> | InferValue<This>,
 						InferGeneratorError<ReturnType>
 					>
@@ -1404,7 +1400,7 @@ export class Result<Value, Err> {
 							? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
 							: never,
 						ReturnType extends U
-							? Result<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+							? OuterResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
 							: never
 					>;
 	}
@@ -1445,7 +1441,7 @@ export class Result<Value, Err> {
 						InferGeneratorReturn<ReturnType> | InferValue<This>,
 						InferGeneratorError<ReturnType> | ErrorType
 					>,
-					Result<
+					OuterResult<
 						InferGeneratorReturn<ReturnType> | InferValue<This>,
 						InferGeneratorError<ReturnType> | ErrorType
 					>
@@ -1466,7 +1462,7 @@ export class Result<Value, Err> {
 								>
 							: never,
 						ReturnType extends U
-							? Result<
+							? OuterResult<
 									InferValue<This> | ExtractValue<U>,
 									ExtractError<U> | ErrorType
 								>
@@ -1496,8 +1492,8 @@ export class Result<Value, Err> {
 	 * const result = Result.ok(42); // Result<number, never>
 	 * ```
 	 */
-	static ok(): Result.Ok<void>;
-	static ok<Value>(value: Value): Result.Ok<Value>;
+	static ok(): OuterResult.Ok<void>;
+	static ok<Value>(value: Value): OuterResult.Ok<Value>;
 	static ok(value?: unknown) {
 		return new Result(value, undefined);
 	}
@@ -1513,7 +1509,7 @@ export class Result<Value, Err> {
 	 * const result = Result.error(new NotFoundError()); // Result<never, NotFoundError>
 	 * ```
 	 */
-	static error<Error>(error: Error): Result.Error<Error> {
+	static error<Err>(error: Err): OuterResult.Error<Err> {
 		return new Result(undefined as never, error);
 	}
 
@@ -1523,7 +1519,7 @@ export class Result<Value, Err> {
 	 * @param possibleResult any value that might be a {@linkcode Result} instance.
 	 * @returns true if the provided value is a {@linkcode Result} instance, otherwise false.
 	 */
-	static isResult(possibleResult: unknown): possibleResult is AnyResult {
+	static isResult(possibleResult: unknown): possibleResult is AnyOuterResult {
 		return possibleResult instanceof Result;
 	}
 
@@ -1700,7 +1696,7 @@ export class Result<Value, Err> {
 			catching: false,
 		}) as ListContainsAsync<Items> extends true
 			? AsyncResult<ExtractValues<Unwrapped>, ExtractErrors<Unwrapped>[number]>
-			: Result<ExtractValues<Unwrapped>, ExtractErrors<Unwrapped>[number]>;
+			: OuterResult<ExtractValues<Unwrapped>, ExtractErrors<Unwrapped>[number]>;
 	}
 
 	/**
@@ -1719,7 +1715,7 @@ export class Result<Value, Err> {
 					ExtractValues<Unwrapped>,
 					ExtractErrors<Unwrapped>[number] | AccountForThrowing<Items>
 				>
-			: Result<
+			: OuterResult<
 					ExtractValues<Unwrapped>,
 					ExtractErrors<Unwrapped>[number] | AccountForThrowing<Items>
 				>;
@@ -1751,7 +1747,7 @@ export class Result<Value, Err> {
 	static wrap<Fn extends AnyFunction, ErrorType = NativeError>(
 		fn: Fn,
 		transformError?: (error: unknown) => ErrorType,
-	): (...args: Parameters<Fn>) => Result<ReturnType<Fn>, ErrorType>;
+	): (...args: Parameters<Fn>) => OuterResult<ReturnType<Fn>, ErrorType>;
 	static wrap(
 		fn: AnyFunction | AnyAsyncFunction,
 		transformError?: (error: unknown) => AnyValue,
@@ -1793,7 +1789,7 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		R,
 		AsyncResult<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>,
-		Result<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>
+		OuterResult<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>
 	>;
 	static try<R extends Generator | AsyncGenerator, ErrorType extends AnyValue>(
 		fn: () => R,
@@ -1801,7 +1797,7 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		R,
 		AsyncResult<InferGeneratorReturn<R>, InferGeneratorError<R> | ErrorType>,
-		Result<InferGeneratorReturn<R>, InferGeneratorError<R> | ErrorType>
+		OuterResult<InferGeneratorReturn<R>, InferGeneratorError<R> | ErrorType>
 	>;
 	static try<
 		Fn extends AnyAsyncFunction<AnyResult>,
@@ -1809,11 +1805,13 @@ export class Result<Value, Err> {
 	>(fn: Fn): AsyncResult<InferValue<R>, InferError<R> | NativeError>;
 	static try<Fn extends AnyFunction<AnyResult>, R = ReturnType<Fn>>(
 		fn: Fn,
-	): Result<InferValue<R>, InferError<R> | NativeError>;
+	): OuterResult<InferValue<R>, InferError<R> | NativeError>;
 	static try<ReturnType extends AnyPromise>(
 		fn: () => ReturnType,
 	): AsyncResult<Awaited<ReturnType>, NativeError>;
-	static try<ReturnType>(fn: () => ReturnType): Result<ReturnType, NativeError>;
+	static try<ReturnType>(
+		fn: () => ReturnType,
+	): OuterResult<ReturnType, NativeError>;
 	static try<ReturnType extends AnyPromise, ErrorType extends AnyValue>(
 		fn: () => ReturnType,
 		transform: (error: unknown) => ErrorType,
@@ -1821,7 +1819,7 @@ export class Result<Value, Err> {
 	static try<ReturnType, ErrorType extends AnyValue>(
 		fn: () => ReturnType,
 		transform: (error: unknown) => ErrorType,
-	): Result<ReturnType, ErrorType>;
+	): OuterResult<ReturnType, ErrorType>;
 	static try(
 		fn: AnyFunction | AnyAsyncFunction,
 		transform?: (error: unknown) => any,
@@ -2034,7 +2032,7 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T>>
 	>;
 	static gen<T extends Generator | AsyncGenerator, This>(
 		self: This,
@@ -2042,14 +2040,14 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T>>
 	>;
 	static gen<T extends Generator | AsyncGenerator>(
 		generator: T,
 	): IfGeneratorAsync<
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-		Result<InferGeneratorReturn<T>, InferGeneratorError<T>>
+		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T>>
 	>;
 	static gen<T extends Generator | AsyncGenerator>(
 		generatorOrSelfOrFn: unknown,
@@ -2078,7 +2076,7 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
-		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
+		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
 	>;
 	static genCatching<
 		T extends Generator | AsyncGenerator,
@@ -2089,7 +2087,7 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
-		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
+		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
 	>;
 	static genCatching<
 		T extends Generator | AsyncGenerator,
@@ -2102,7 +2100,7 @@ export class Result<Value, Err> {
 	): IfGeneratorAsync<
 		T,
 		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
-		Result<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
+		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
 	>;
 	static genCatching(
 		generatorOrSelfOrFn: unknown,
@@ -2152,8 +2150,8 @@ export class Result<Value, Err> {
 	 * @param result the result instance to assert against.
 	 */
 	static assertOk<Value>(
-		result: Result<Value, any>,
-	): asserts result is Result<Value, never> {
+		result: OuterResult<Value, any>,
+	): asserts result is OuterResult<Value, never> {
 		if (result.isError()) {
 			throw new Error("Expected a successful result, but got an error instead");
 		}
@@ -2166,8 +2164,8 @@ export class Result<Value, Err> {
 	 * @param result the result instance to assert against.
 	 */
 	static assertError<Err>(
-		result: Result<any, Err>,
-	): asserts result is Result<never, Err> {
+		result: OuterResult<any, Err>,
+	): asserts result is OuterResult<never, Err> {
 		if (result.isOk()) {
 			throw new Error("Expected a failed result, but got a value instead");
 		}

@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { AsyncResult, Result } from "./result.js";
+import { AsyncResult, Result } from "./index.js";
 
 class CustomError extends Error {}
 
@@ -66,7 +66,7 @@ describe("Result", () => {
 
 			const okResult = Result.ok(42);
 			Result.assertOk(okResult);
-			expectTypeOf(okResult).toEqualTypeOf<Result<number, never>>();
+			expectTypeOf(okResult).toEqualTypeOf<Result.Ok<number>>();
 		});
 	});
 
@@ -90,7 +90,7 @@ describe("Result", () => {
 
 			const failureResult = Result.error(errorA);
 			Result.assertError(failureResult);
-			expectTypeOf(failureResult).toEqualTypeOf<Result<never, ErrorA>>();
+			expectTypeOf(failureResult).toEqualTypeOf<Result.Error<ErrorA>>();
 		});
 	});
 
@@ -1355,7 +1355,7 @@ describe("Result", () => {
 	describe("instance methods and getters", () => {
 		describe("$inferValue / $inferError", () => {
 			it("infers the value and error type of a result", () => {
-				const result: Result<number, ErrorA> = Result.ok(42);
+				const result = Result.ok(42) as Result<number, ErrorA>;
 
 				expectTypeOf(result.$inferValue).toEqualTypeOf<number>();
 				expectTypeOf(result.$inferError).toEqualTypeOf<ErrorA>();
@@ -1364,21 +1364,21 @@ describe("Result", () => {
 
 		describe("value", () => {
 			it("returns the encapsulated value on success", () => {
-				const result: Result<number, ErrorA> = Result.ok(42);
+				const result = Result.ok(42) as Result<number, ErrorA>;
 				expectTypeOf(result.value).toEqualTypeOf<number | undefined>();
 				expect(result.value).toBe(42);
 			});
 
 			it("is aware whether there is a possible error or not", () => {
 				const result = Result.ok(42);
-				expectTypeOf(result).toEqualTypeOf<Result<number, never>>();
+				expectTypeOf(result).toEqualTypeOf<Result.Ok<number>>();
 				// since the error type is 'never', in this case, the value can only be a number
 				expectTypeOf(result.value).toEqualTypeOf<number>();
 			});
 
 			it("is aware whether there is a possible value or not", () => {
 				const result = Result.error(errorA);
-				expectTypeOf(result).toEqualTypeOf<Result<never, ErrorA>>();
+				expectTypeOf(result).toEqualTypeOf<Result.Error<ErrorA>>();
 				// since the value type is 'never', in this case, the value can only be undefined
 				expectTypeOf(result.value).toEqualTypeOf<undefined>();
 			});
@@ -1394,21 +1394,21 @@ describe("Result", () => {
 
 		describe("error", () => {
 			it("returns the encapsulated error on failure", () => {
-				const result: Result<number, ErrorA> = Result.error(errorA);
+				const result = Result.error(errorA) as Result<number, ErrorA>;
 				expectTypeOf(result.error).toEqualTypeOf<ErrorA | undefined>();
 				expect(result.error).toEqual(errorA);
 			});
 
 			it("is aware whether there is a possible value or not", () => {
 				const result = Result.error(errorA);
-				expectTypeOf(result).toEqualTypeOf<Result<never, ErrorA>>();
+				expectTypeOf(result).toEqualTypeOf<Result.Error<ErrorA>>();
 				// since the value type is 'never', in this case, the error can only be of type 'ErrorA'
 				expectTypeOf(result.error).toEqualTypeOf<ErrorA>();
 			});
 
 			it("is aware whether there is a possible error or not", () => {
 				const result = Result.ok(42);
-				expectTypeOf(result).toEqualTypeOf<Result<number, never>>();
+				expectTypeOf(result).toEqualTypeOf<Result.Ok<number>>();
 				// since the error type is 'never', in this case, the error can only be undefined
 				expectTypeOf(result.error).toEqualTypeOf<undefined>();
 			});
@@ -1424,11 +1424,11 @@ describe("Result", () => {
 
 		describe("isOk", () => {
 			it("returns true if the result is ok", () => {
-				const result: Result<number, ErrorA> = Result.ok(42);
+				const result = Result.ok(42) as Result<number, ErrorA>;
 				expect(result.isOk()).toBe(true);
 
 				if (result.isOk()) {
-					expectTypeOf(result).toEqualTypeOf<Result<number, never>>();
+					expectTypeOf(result).toEqualTypeOf<Result.Ok<number>>();
 				}
 			});
 
@@ -1454,7 +1454,7 @@ describe("Result", () => {
 				expect(result.isError()).toBe(true);
 
 				if (result.isError()) {
-					expectTypeOf(result).toEqualTypeOf<Result<never, ErrorA>>();
+					expectTypeOf(result).toEqualTypeOf<Result.Error<ErrorA>>();
 				}
 			});
 
@@ -1469,14 +1469,14 @@ describe("Result", () => {
 					| Result<number, never>;
 
 				if (result.isError()) {
-					expectTypeOf(result).toEqualTypeOf<Result<never, ErrorA>>();
+					expectTypeOf(result).toEqualTypeOf<Result.Error<ErrorA>>();
 				}
 			});
 		});
 
 		describe("toTuple", () => {
 			it("returns a tuple on a successful result", () => {
-				const result: Result<number, ErrorA> = Result.ok(2);
+				const result = Result.ok(2) as Result<number, ErrorA>;
 
 				const [value, error] = result.toTuple();
 				if (error) {
@@ -1490,7 +1490,7 @@ describe("Result", () => {
 			});
 
 			it("returns a tuple on a failed result", () => {
-				const result: Result<number, ErrorA> = Result.error(errorA);
+				const result = Result.error(errorA) as Result<number, ErrorA>;
 
 				const [value, error] = result.toTuple();
 				if (error) {
@@ -1526,9 +1526,10 @@ describe("Result", () => {
 
 		describe("errorOrNull", () => {
 			it("returns the error on failure", () => {
-				const result: Result<number, CustomError> = Result.error(
-					new CustomError(),
-				);
+				const result = Result.error(new CustomError()) as Result<
+					number,
+					CustomError
+				>;
 
 				expectTypeOf(result.errorOrNull()).toEqualTypeOf<CustomError | null>();
 
@@ -1536,7 +1537,7 @@ describe("Result", () => {
 			});
 
 			it("returns null on success", () => {
-				const result: Result<number, CustomError> = Result.ok(2);
+				const result = Result.ok(2) as Result<number, CustomError>;
 
 				// Note: TS is smart enough to know that in this case there will never be an error
 				// because of the Result<number, never> type.
@@ -1547,12 +1548,12 @@ describe("Result", () => {
 
 			it("is aware whether there is a possible value or not", () => {
 				const failureResult = Result.error(new CustomError());
-				expectTypeOf(failureResult).toEqualTypeOf<Result<never, CustomError>>();
+				expectTypeOf(failureResult).toEqualTypeOf<Result.Error<CustomError>>();
 				// since the value type is 'never', in this case, the error can only be of type 'CustomError'
 				expectTypeOf(failureResult.errorOrNull()).toEqualTypeOf<CustomError>();
 
 				const okResult = Result.ok(42);
-				expectTypeOf(okResult).toEqualTypeOf<Result<number, never>>();
+				expectTypeOf(okResult).toEqualTypeOf<Result.Ok<number>>();
 				// since the error type is 'never', in this case, the error can only be null
 				expectTypeOf(okResult.errorOrNull()).toEqualTypeOf<null>();
 			});
@@ -1560,9 +1561,10 @@ describe("Result", () => {
 
 		describe("getOrNull", () => {
 			it("returns null on failure", () => {
-				const result: Result<number, CustomError> = Result.error(
-					new CustomError(),
-				);
+				const result = Result.error(new CustomError()) as Result<
+					number,
+					CustomError
+				>;
 
 				expectTypeOf(result.getOrNull()).toEqualTypeOf<number | null>();
 
@@ -1570,7 +1572,7 @@ describe("Result", () => {
 			});
 
 			it("returns the encapsulated value on success", () => {
-				const result: Result<number, CustomError> = Result.ok(2);
+				const result = Result.ok(2) as Result<number, CustomError>;
 
 				expectTypeOf(result.getOrNull()).toEqualTypeOf<number | null>();
 
@@ -1579,12 +1581,12 @@ describe("Result", () => {
 
 			it("is aware whether there is a possible error or not", () => {
 				const okResult = Result.ok(42);
-				expectTypeOf(okResult).toEqualTypeOf<Result<number, never>>();
+				expectTypeOf(okResult).toEqualTypeOf<Result.Ok<number>>();
 				// since the error type is 'never', in this case, the error can only be a number
 				expectTypeOf(okResult.getOrNull()).toEqualTypeOf<number>();
 
 				const failureResult = Result.error(new CustomError());
-				expectTypeOf(failureResult).toEqualTypeOf<Result<never, CustomError>>();
+				expectTypeOf(failureResult).toEqualTypeOf<Result.Error<CustomError>>();
 				// since the value type is 'never', in this case, the value can only be a number
 				expectTypeOf(failureResult.getOrNull()).toEqualTypeOf<null>();
 			});
@@ -1699,7 +1701,7 @@ describe("Result", () => {
 
 		describe("fold", () => {
 			it("returns the result of the onSuccess-callback for the encapsulated value if this instance represents success", () => {
-				const result: Result<number, ErrorA> = Result.ok(2);
+				const result = Result.ok(2) as Result<number, ErrorA>;
 
 				const spy = vi.fn();
 
@@ -1722,7 +1724,7 @@ describe("Result", () => {
 			});
 
 			it("returns the result of the onFailure-callback for the encapsulated error if it is a failure", () => {
-				const result: Result<number, string> = Result.error("some failure");
+				const result = Result.error("some failure") as Result<number, string>;
 
 				const spy = vi.fn();
 
@@ -2597,6 +2599,32 @@ describe("Result", () => {
 				}),
 			).toEqualTypeOf<Result<number, Error>>();
 		});
+	});
+
+	it("correctly narrows the type of the result when using isOk/isError", () => {
+		const resultA = Result.ok(12) as Result<number, ErrorA>;
+		const resultB = Result.ok(12) as Result<number, ErrorB>;
+
+		if (resultA.isOk()) {
+			expectTypeOf(resultA).toEqualTypeOf<Result.Ok<number>>;
+			expectTypeOf(resultA.value).toBeNumber();
+			expectTypeOf(resultA.error).toBeUndefined();
+		} else {
+			expectTypeOf(resultA).toEqualTypeOf<Result.Error<ErrorA>>();
+			expectTypeOf(resultA.value).toBeUndefined();
+			expectTypeOf(resultA.error).toEqualTypeOf<ErrorA>();
+		}
+
+		if (resultB.isError()) {
+			expectTypeOf(resultB).toEqualTypeOf<Result.Error<ErrorB>>();
+			expectTypeOf(resultB.value).toBeUndefined();
+			expectTypeOf(resultB.error).toEqualTypeOf<ErrorB>();
+			return;
+		}
+
+		expectTypeOf(resultB).toEqualTypeOf<Result.Ok<number>>();
+		expectTypeOf(resultB.value).toBeNumber();
+		expectTypeOf(resultB.error).toBeUndefined();
 	});
 });
 
@@ -3476,3 +3504,27 @@ describe("AsyncResult", () => {
 		});
 	});
 });
+
+// function bla() {
+// 	if (Math.random() > 0.5) {
+// 		return Result.ok(42);
+// 	}
+
+// 	if (Math.random() > 0.5) {
+// 		return Result.error(new ErrorB());
+// 	}
+
+// 	return Result.error(new ErrorA());
+// }
+
+// const x = bla().map((val) => val * 2);
+
+// if (x.isOk()) {
+// 	x; //=>
+// 	expectTypeOf(x.value).toBeNumber();
+// 	expectTypeOf(x.error).toBeUndefined();
+// } else {
+// 	x; //=>
+// 	expectTypeOf(x.value).toBeUndefined();
+// 	expectTypeOf(x.error).toEqualTypeOf<ErrorA | ErrorB>();
+// }

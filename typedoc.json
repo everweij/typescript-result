@@ -8,4 +8,5 @@
   "excludePrivate": true,
   "docsRoot": "./docs",
   "readme": "none",
+  "hideBreadcrumbs": true,
 }

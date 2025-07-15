@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   test-and-build:
+    name: Test and Build
     runs-on: ubuntu-latest
     steps:
       - name: Git clone the repository
@@ -54,7 +55,7 @@ jobs:
         run: npm run predocs
 
       - name: Build docs
-        run: npm run build:docs
+        run: npm run docs:build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

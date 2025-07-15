@@ -426,4 +426,4 @@ const result = Result.gen(readConfig("config.json"));
 ### Next steps
 
 Hopefully this gives you a good idea of how to get started with `typescript-result`.
-For more information on how to use this library, please continue with the [guide](/a-note-on-errors). If you want to see more examples, check out the [examples](/examples). Ready to give it a spin? Try it out for yourself in our [playground](/playground).
+For more information on how to use this library, please continue with the [guide](/a-note-on-errors). If you want to see more examples, check out the [examples](/examples/). Ready to give it a spin? Try it out for yourself in our [playground](/playground).

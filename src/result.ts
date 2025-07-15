@@ -74,9 +74,6 @@ type SyncOrAsyncGenerator<Y, R, N> =
 	| Generator<Y, R, N>
 	| AsyncGenerator<Y, R, N>;
 
-/**
- * @internal
- */
 export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
 	any,
 	infer R,
@@ -85,9 +82,6 @@ export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
 	? ExtractValue<R>
 	: never;
 
-/**
- * @internal
- */
 export type InferGeneratorError<T> = [T] extends [
 	SyncOrAsyncGenerator<never, infer R, any>,
 ]
@@ -110,9 +104,6 @@ type IsGeneratorAsync<T> = T extends SyncOrAsyncGenerator<
 				: false
 	: false;
 
-/**
- * @internal
- */
 export type IfGeneratorAsync<T, Yes, No> = IsGeneratorAsync<T> extends true
 	? Yes
 	: No;

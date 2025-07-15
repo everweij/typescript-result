@@ -1,0 +1,11 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "out": "./docs/api",
+  "entryPoints": ["./src/result.ts"],
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/examples/**", "**/docs/**"],
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "docsRoot": "./docs",
+  "readme": "none",
+}

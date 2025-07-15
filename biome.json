@@ -33,6 +33,6 @@
 		"defaultBranch": "main"
 	},
 	"files": {
-		"includes": ["src/**/*", "examples/**/*"]
+		"includes": ["src/**/*", "examples/**/*", "docs/**/*", "!docs/**/*.vue"]
 	}
 }

@@ -73,6 +73,10 @@ type ErrorOr<Value, Err, Or> = [Value] extends [never]
 type SyncOrAsyncGenerator<Y, R, N> =
 	| Generator<Y, R, N>
 	| AsyncGenerator<Y, R, N>;
+
+/**
+ * @internal
+ */
 export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
 	any,
 	infer R,
@@ -80,6 +84,10 @@ export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
 >
 	? ExtractValue<R>
 	: never;
+
+/**
+ * @internal
+ */
 export type InferGeneratorError<T> = [T] extends [
 	SyncOrAsyncGenerator<never, infer R, any>,
 ]
@@ -102,6 +110,9 @@ type IsGeneratorAsync<T> = T extends SyncOrAsyncGenerator<
 				: false
 	: false;
 
+/**
+ * @internal
+ */
 export type IfGeneratorAsync<T, Yes, No> = IsGeneratorAsync<T> extends true
 	? Yes
 	: No;
@@ -135,6 +146,13 @@ type AccountForThrowing<T extends any[]> = {
  */
 export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	/**
+	 * @internal
+	 */
+	constructor(executor: ConstructorParameters<typeof Promise>[0]) {
+		super(executor as any);
+	}
+
+	/**
 	 * Utility getter to infer the value type of the result.
 	 * Note: this getter does not hold any value, it's only used for type inference.
 	 */
@@ -146,6 +164,9 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 */
 	declare $inferError: Err;
 
+	/**
+	 * @internal
+	 */
 	*[Symbol.iterator](): Generator<{ error: Err; async: true }, Value, any> {
 		return yield this as any;
 	}
@@ -177,15 +198,17 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * // value must be a number
 	 * ```
 	 */
-	async toTuple(): Promise<
-		[Err] extends [never]
-			? [value: Value, error: never]
-			: [Value] extends [never]
-				? [value: never, error: Err]
-				: [value: Value, error: null] | [value: null, error: Err]
-	> {
+	async toTuple<
+		This extends AnyAsyncResult,
+		V = InferValue<This>,
+		E = InferError<This>,
+	>(this: This) {
 		const result = (await this) as Result<Value, Err>;
-		return result.toTuple();
+		return result.toTuple() as [E] extends [never]
+			? [value: V, error: never]
+			: [V] extends [never]
+				? [value: never, error: E]
+				: [value: V, error: null] | [value: null, error: E];
 	}
 
 	/**
@@ -769,6 +792,9 @@ export class Result<Value, Err> {
 	 */
 	declare $inferError: Err;
 
+	/**
+	 * @internal
+	 */
 	*[Symbol.iterator](): Generator<{ error: Err; async: false }, Value, any> {
 		return yield this as any;
 	}
@@ -905,12 +931,12 @@ export class Result<Value, Err> {
 	 * // value must be a number
 	 * ```
 	 */
-	toTuple() {
-		return [this._value ?? null, this._error ?? null] as [Err] extends [never]
-			? [value: Value, error: never]
-			: [Value] extends [never]
-				? [value: never, error: Err]
-				: [value: Value, error: null] | [value: null, error: Err];
+	toTuple<T extends AnyResult, V = InferValue<T>, E = InferError<T>>(this: T) {
+		return [this._value ?? null, this._error ?? null] as [E] extends [never]
+			? [value: V, error: never]
+			: [V] extends [never]
+				? [value: never, error: E]
+				: [value: V, error: null] | [value: null, error: E];
 	}
 
 	/**
@@ -1491,6 +1517,9 @@ export class Result<Value, Err> {
 }
 
 export class ResultFactory {
+	/* c8 ignore next */
+	private constructor() {}
+
 	/**
 	 * Creates a new result instance that represents a successful outcome.
 	 *

@@ -33,8 +33,9 @@ export namespace Result {
 		: never;
 }
 
-export type Result<Value, Err> =
-	| ([Value] extends [never] ? never : Result.Ok<Value>)
-	| ([Err] extends [never] ? never : Result.Error<Err>);
+type Ok<Value> = [Value] extends [never] ? never : Result.Ok<Value>;
+type Error<Err> = [Err] extends [never] ? never : Result.Error<Err>;
+
+export type Result<Value, Err> = Ok<Value> | Error<Err>;
 
 export const Result: typeof ResultFactory = ResultFactory;

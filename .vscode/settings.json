@@ -15,6 +15,9 @@
   "[markdown]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
+  "[vue]": {
+    "editor.defaultFormatter": "Vue.volar",
+  },
   "typescript.reportStyleChecksAsWarnings": false,
   "prettier.enable": false,
   "typescript.tsdk": "node_modules/typescript/lib"

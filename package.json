@@ -1,73 +1,86 @@
 {
-	"private": false,
-	"name": "typescript-result",
-	"version": "3.4.0-beta.2",
-	"description": "Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code.",
-	"keywords": [
-		"result",
-		"type",
-		"TypeScript",
-		"ts",
-		"error",
-		"error handling",
-		"exception",
-		"ok",
-		"success",
-		"failure",
-		"Rust",
-		"functional programming"
-	],
-	"author": {
-		"name": "Erik Verweij",
-		"url": "https://github.com/everweij"
-	},
-	"repository": "github:everweij/typescript-result",
-	"homepage": "https://github.com/everweij/typescript-result#readme",
-	"bugs": {
-		"url": "https://github.com/everweij/typescript-result/issues/new"
-	},
-	"license": "MIT",
-	"files": [
-		"dist"
-	],
-	"main": "dist/index.js",
-	"type": "module",
-	"module": "dist/index.js",
-	"types": "dist/index.d.ts",
-	"engines": {
-		"node": ">=18"
-	},
-	"exports": {
-		".": {
-			"import": {
-				"types": "./dist/index.d.ts",
-				"default": "./dist/index.js"
-			},
-			"require": {
-				"types": "./dist/index.d.cts",
-				"default": "./dist/index.cjs"
-			}
-		}
-	},
-	"scripts": {
-		"test": "vitest",
-		"test:ci": "vitest run",
-		"coverage": "vitest run --coverage",
-		"lint": "biome check --write src",
-		"typecheck": "tsc --noEmit",
-		"prepare": "husky",
-		"build": "tsup",
-		"gzip-size": "npx gzip-size-cli ./dist/index.js"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "2.0.6",
-		"@types/node": "^24.0.8",
-		"@vitest/coverage-v8": "^3.2.4",
-		"husky": "^9.1.7",
-		"terser": "^5.43.1",
-		"tsup": "^8.5.0",
-		"typescript": "^5.8.3",
-		"vitest": "^3.2.4",
-		"zod": "^3.25.71"
-	}
+  "private": false,
+  "name": "typescript-result",
+  "version": "3.4.0-beta.2",
+  "description": "Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code.",
+  "keywords": [
+    "result",
+    "type",
+    "TypeScript",
+    "ts",
+    "error",
+    "error handling",
+    "exception",
+    "ok",
+    "success",
+    "failure",
+    "Rust",
+    "functional programming"
+  ],
+  "author": {
+    "name": "Erik Verweij",
+    "url": "https://github.com/everweij"
+  },
+  "repository": "github:everweij/typescript-result",
+  "homepage": "https://github.com/everweij/typescript-result#readme",
+  "bugs": {
+    "url": "https://github.com/everweij/typescript-result/issues/new"
+  },
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "main": "dist/index.js",
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:ci": "vitest run",
+    "coverage": "vitest run --coverage",
+    "lint": "biome check --write src",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky",
+    "build": "tsup",
+    "gzip-size": "npx gzip-size-cli ./dist/index.js",
+    "predocs": "typedoc",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.0.6",
+    "@shikijs/monaco": "^3.7.0",
+    "@shikijs/vitepress-twoslash": "^3.7.0",
+    "@types/node": "^24.0.8",
+    "@vitest/coverage-v8": "^3.2.4",
+    "husky": "^9.1.7",
+    "monaco-editor": "^0.52.2",
+    "prettier": "^3.6.2",
+    "terser": "^5.43.1",
+    "tsup": "^8.5.0",
+    "typedoc": "^0.28.7",
+    "typedoc-plugin-markdown": "^4.7.0",
+    "typedoc-vitepress-theme": "^1.1.2",
+    "typescript": "^5.8.3",
+    "vitepress": "^2.0.0-alpha.8",
+    "vitest": "^3.2.4",
+    "vue-sonner": "^2.0.1",
+    "zod": "^3.25.71"
+  }
 }

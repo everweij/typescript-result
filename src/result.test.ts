@@ -1479,6 +1479,8 @@ describe("Result", () => {
 				const result = Result.ok(2) as Result<number, ErrorA>;
 
 				const [value, error] = result.toTuple();
+				expectTypeOf(value).toEqualTypeOf<number | null>();
+				expectTypeOf(error).toEqualTypeOf<ErrorA | null>();
 				if (error) {
 					expectTypeOf(error).toEqualTypeOf<ErrorA>();
 				} else {
@@ -2712,9 +2714,11 @@ describe("AsyncResult", () => {
 
 		describe("toTuple", () => {
 			it("returns a tuple on a successful result", async () => {
-				const result: AsyncResult<number, ErrorA> = AsyncResult.ok(2);
+				const result = AsyncResult.ok(2) as AsyncResult<number, ErrorA>;
 
 				const [value, error] = await result.toTuple();
+				expectTypeOf(value).toEqualTypeOf<number | null>();
+				expectTypeOf(error).toEqualTypeOf<ErrorA | null>();
 				if (error) {
 					expectTypeOf(error).toEqualTypeOf<ErrorA>();
 				} else {

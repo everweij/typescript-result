@@ -16,6 +16,32 @@ export default defineConfig({
 				href: "/typescript-result-logo.svg",
 			},
 		],
+		// Open Graph tags for social sharing
+		["meta", { property: "og:type", content: "website" }],
+		["meta", { property: "og:title", content: "TypeScript Result" }],
+		[
+			"meta",
+			{
+				property: "og:description",
+				content:
+					"Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code.",
+			},
+		],
+		["meta", { property: "og:image", content: "/typescript-result-logo.svg" }],
+		["meta", { property: "og:url", content: "https://typescript-result.dev" }],
+		["meta", { property: "og:site_name", content: "TypeScript Result" }],
+		// Twitter Card tags
+		["meta", { name: "twitter:card", content: "summary_large_image" }],
+		["meta", { name: "twitter:title", content: "TypeScript Result" }],
+		[
+			"meta",
+			{
+				name: "twitter:description",
+				content:
+					"Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code.",
+			},
+		],
+		["meta", { name: "twitter:image", content: "/typescript-result-logo.svg" }],
 	],
 	cleanUrls: true,
 	themeConfig: {

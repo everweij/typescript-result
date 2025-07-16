@@ -55,7 +55,10 @@ type ExtractErrors<T extends any[]> = {
 		: ExtractError<T[I]>;
 };
 
-type ReturnsAsync<T> = Contains<T, AnyAsyncResult | AnyPromise>;
+type ReturnsAsync<T> = Contains<
+	T,
+	AnyAsyncResult | AnyPromise | AsyncGenerator
+>;
 type IfReturnsAsync<T, Yes, No> = ReturnsAsync<T> extends true ? Yes : No;
 
 type ValueOr<Value, Err, Or> = [Err] extends [never]
@@ -500,18 +503,20 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			this.then(async (result) => resolve(await result.map(transform))).catch(
 				reject,
 			);
-		}) as [ReturnType] extends [Generator | AsyncGenerator]
-			? AsyncResult<
-					InferGeneratorReturn<ReturnType>,
-					InferGeneratorError<ReturnType> | InferError<This>
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-					: never
-				: ReturnType extends U
-					? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-					: never;
+		}) as [InferValue<This>] extends [never]
+			? AsyncResult<InferValue<This>, InferError<This>>
+			: [ReturnType] extends [Generator | AsyncGenerator]
+				? AsyncResult<
+						InferGeneratorReturn<ReturnType>,
+						InferGeneratorError<ReturnType> | InferError<This>
+					>
+				: [ReturnType] extends [Promise<infer PValue>]
+					? PValue extends U
+						? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
+						: never
+					: ReturnType extends U
+						? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
+						: never;
 	}
 
 	/**
@@ -547,24 +552,26 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 						reject(err);
 					}
 				});
-		}) as [ReturnType] extends [Generator | AsyncGenerator]
-			? AsyncResult<
-					InferGeneratorReturn<ReturnType>,
-					InferGeneratorError<ReturnType> | InferError<This> | ErrorType
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<
-							ExtractValue<U>,
-							InferError<This> | ExtractError<U> | ErrorType
-						>
-					: never
-				: ReturnType extends U
-					? AsyncResult<
-							ExtractValue<U>,
-							InferError<This> | ExtractError<U> | ErrorType
-						>
-					: never;
+		}) as [InferValue<This>] extends [never]
+			? AsyncResult<InferValue<This>, InferError<This>>
+			: [ReturnType] extends [Generator | AsyncGenerator]
+				? AsyncResult<
+						InferGeneratorReturn<ReturnType>,
+						InferGeneratorError<ReturnType> | InferError<This> | ErrorType
+					>
+				: [ReturnType] extends [Promise<infer PValue>]
+					? PValue extends U
+						? AsyncResult<
+								ExtractValue<U>,
+								InferError<This> | ExtractError<U> | ErrorType
+							>
+						: never
+					: ReturnType extends U
+						? AsyncResult<
+								ExtractValue<U>,
+								InferError<This> | ExtractError<U> | ErrorType
+							>
+						: never;
 	}
 
 	/**
@@ -643,18 +650,20 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 					reject(error);
 				}
 			}).catch(reject),
-		) as [ReturnType] extends [Generator | AsyncGenerator]
-			? AsyncResult<
-					InferGeneratorReturn<ReturnType> | InferValue<This>,
-					InferGeneratorError<ReturnType>
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-					: never
-				: ReturnType extends U
-					? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-					: never;
+		) as [InferError<This>] extends [never]
+			? AsyncResult<InferValue<This>, InferError<This>>
+			: [ReturnType] extends [Generator | AsyncGenerator]
+				? AsyncResult<
+						InferGeneratorReturn<ReturnType> | InferValue<This>,
+						InferGeneratorError<ReturnType>
+					>
+				: [ReturnType] extends [Promise<infer PValue>]
+					? PValue extends U
+						? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+						: never
+					: ReturnType extends U
+						? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
+						: never;
 	}
 
 	/**
@@ -681,24 +690,26 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			this.then((result) => {
 				resolve(result.recoverCatching(onFailure, transformError) as any);
 			}).catch(reject),
-		) as [ReturnType] extends [Generator | AsyncGenerator]
-			? AsyncResult<
-					InferGeneratorReturn<ReturnType> | InferValue<This>,
-					InferGeneratorError<ReturnType> | ErrorType
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<
-							InferValue<This> | ExtractValue<U>,
-							ExtractError<U> | ErrorType
-						>
-					: never
-				: ReturnType extends U
-					? AsyncResult<
-							InferValue<This> | ExtractValue<U>,
-							ExtractError<U> | ErrorType
-						>
-					: never;
+		) as [InferError<This>] extends [never]
+			? AsyncResult<InferValue<This>, InferError<This>>
+			: [ReturnType] extends [Generator | AsyncGenerator]
+				? AsyncResult<
+						InferGeneratorReturn<ReturnType> | InferValue<This>,
+						InferGeneratorError<ReturnType> | ErrorType
+					>
+				: [ReturnType] extends [Promise<infer PValue>]
+					? PValue extends U
+						? AsyncResult<
+								InferValue<This> | ExtractValue<U>,
+								ExtractError<U> | ErrorType
+							>
+						: never
+					: ReturnType extends U
+						? AsyncResult<
+								InferValue<This> | ExtractValue<U>,
+								ExtractError<U> | ErrorType
+							>
+						: never;
 	}
 
 	/**
@@ -1249,31 +1260,45 @@ export class Result<Value, Err> {
 				: isAsyncFn(transform)
 					? AsyncResult.error(this._error)
 					: this
-		) as [ReturnType] extends [Generator | AsyncGenerator]
-			? IfGeneratorAsync<
-					ReturnType,
-					AsyncResult<
-						InferGeneratorReturn<ReturnType>,
-						InferGeneratorError<ReturnType> | InferError<This>
-					>,
-					OuterResult<
-						InferGeneratorReturn<ReturnType>,
-						InferGeneratorError<ReturnType> | InferError<This>
-					>
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-					: never
-				: IfReturnsAsync<
-						ReturnType,
-						ReturnType extends U
+		) as
+			// If the result comes to an dead end (only a failure is possible),
+			// we return the original result type directly.
+			[InferValue<This>] extends [never]
+				? OuterResult<InferValue<This>, InferError<This>>
+				: // In case of a generator function callback...
+					[ReturnType] extends [Generator | AsyncGenerator]
+					? IfGeneratorAsync<
+							ReturnType,
+							AsyncResult<
+								InferGeneratorReturn<ReturnType>,
+								InferGeneratorError<ReturnType> | InferError<This>
+							>,
+							OuterResult<
+								InferGeneratorReturn<ReturnType>,
+								InferGeneratorError<ReturnType> | InferError<This>
+							>
+						>
+					: //  In case of an async function callback...
+						[ReturnType] extends [Promise<infer PValue>]
+						? PValue extends U
 							? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-							: never,
-						ReturnType extends U
-							? OuterResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
 							: never
-					>;
+						: // In case of a regular function callback...
+							IfReturnsAsync<
+								ReturnType,
+								ReturnType extends U
+									? AsyncResult<
+											ExtractValue<U>,
+											InferError<This> | ExtractError<U>
+										>
+									: never,
+								ReturnType extends U
+									? OuterResult<
+											ExtractValue<U>,
+											InferError<This> | ExtractError<U>
+										>
+									: never
+							>;
 	}
 
 	/**
@@ -1301,40 +1326,48 @@ export class Result<Value, Err> {
 					() => transformValue(this._value),
 					transformError as AnyFunction,
 				)
-			: this) as unknown as [ReturnType] extends [Generator | AsyncGenerator]
-			? IfGeneratorAsync<
-					ReturnType,
-					AsyncResult<
-						InferGeneratorReturn<ReturnType>,
-						InferGeneratorError<ReturnType> | InferError<This> | ErrorType
-					>,
-					OuterResult<
-						InferGeneratorReturn<ReturnType>,
-						InferGeneratorError<ReturnType> | InferError<This> | ErrorType
-					>
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<
-							ExtractValue<U>,
-							InferError<This> | ExtractError<U> | ErrorType
+			: this) as unknown as
+			// If the result comes to an dead end (only a failure is possible),
+			// we return the original result type directly.
+			[InferValue<This>] extends [never]
+				? OuterResult<InferValue<This>, InferError<This>>
+				: // In case of a generator function callback...
+					[ReturnType] extends [Generator | AsyncGenerator]
+					? IfGeneratorAsync<
+							ReturnType,
+							AsyncResult<
+								InferGeneratorReturn<ReturnType>,
+								InferGeneratorError<ReturnType> | InferError<This> | ErrorType
+							>,
+							OuterResult<
+								InferGeneratorReturn<ReturnType>,
+								InferGeneratorError<ReturnType> | InferError<This> | ErrorType
+							>
 						>
-					: never
-				: IfReturnsAsync<
-						ReturnType,
-						ReturnType extends U
+					: // In case of an async function callback...
+						[ReturnType] extends [Promise<infer PValue>]
+						? PValue extends U
 							? AsyncResult<
 									ExtractValue<U>,
 									InferError<This> | ExtractError<U> | ErrorType
 								>
-							: never,
-						ReturnType extends U
-							? OuterResult<
-									ExtractValue<U>,
-									InferError<This> | ExtractError<U> | ErrorType
-								>
 							: never
-					>;
+						: // In case of a regular function callback...
+							IfReturnsAsync<
+								ReturnType,
+								ReturnType extends U
+									? AsyncResult<
+											ExtractValue<U>,
+											InferError<This> | ExtractError<U> | ErrorType
+										>
+									: never,
+								ReturnType extends U
+									? OuterResult<
+											ExtractValue<U>,
+											InferError<This> | ExtractError<U> | ErrorType
+										>
+									: never
+							>;
 	}
 
 	/**
@@ -1403,31 +1436,45 @@ export class Result<Value, Err> {
 					? AsyncResult.ok(this._value)
 					: this
 				: ResultFactory.run(() => onFailure(this._error))
-		) as [ReturnType] extends [Generator | AsyncGenerator]
-			? IfGeneratorAsync<
-					ReturnType,
-					AsyncResult<
-						InferGeneratorReturn<ReturnType> | InferValue<This>,
-						InferGeneratorError<ReturnType>
-					>,
-					OuterResult<
-						InferGeneratorReturn<ReturnType> | InferValue<This>,
-						InferGeneratorError<ReturnType>
-					>
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-					: never
-				: IfReturnsAsync<
-						ReturnType,
-						ReturnType extends U
+		) as
+			// If the only a success is possible, there's nothing to recover from,
+			// so we return the original result type directly.
+			[InferError<This>] extends [never]
+				? OuterResult<InferValue<This>, InferError<This>>
+				: // In case of a generator function callback...
+					[ReturnType] extends [Generator | AsyncGenerator]
+					? IfGeneratorAsync<
+							ReturnType,
+							AsyncResult<
+								InferGeneratorReturn<ReturnType> | InferValue<This>,
+								InferGeneratorError<ReturnType>
+							>,
+							OuterResult<
+								InferGeneratorReturn<ReturnType> | InferValue<This>,
+								InferGeneratorError<ReturnType>
+							>
+						>
+					: // In case of an async function callback...
+						[ReturnType] extends [Promise<infer PValue>]
+						? PValue extends U
 							? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-							: never,
-						ReturnType extends U
-							? OuterResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
 							: never
-					>;
+						: // In case of a regular function callback...
+							IfReturnsAsync<
+								ReturnType,
+								ReturnType extends U
+									? AsyncResult<
+											InferValue<This> | ExtractValue<U>,
+											ExtractError<U>
+										>
+									: never,
+								ReturnType extends U
+									? OuterResult<
+											InferValue<This> | ExtractValue<U>,
+											ExtractError<U>
+										>
+									: never
+							>;
 	}
 
 	/**
@@ -1459,40 +1506,48 @@ export class Result<Value, Err> {
 						() => onFailure(this._error),
 						transformError as AnyFunction,
 					)
-		) as [ReturnType] extends [Generator | AsyncGenerator]
-			? IfGeneratorAsync<
-					ReturnType,
-					AsyncResult<
-						InferGeneratorReturn<ReturnType> | InferValue<This>,
-						InferGeneratorError<ReturnType> | ErrorType
-					>,
-					OuterResult<
-						InferGeneratorReturn<ReturnType> | InferValue<This>,
-						InferGeneratorError<ReturnType> | ErrorType
-					>
-				>
-			: [ReturnType] extends [Promise<infer PValue>]
-				? PValue extends U
-					? AsyncResult<
-							InferValue<This> | ExtractValue<U>,
-							ExtractError<U> | ErrorType
+		) as
+			// If the only a success is possible, there's nothing to recover from,
+			// so we return the original result type directly.
+			[InferError<This>] extends [never]
+				? OuterResult<InferValue<This>, InferError<This>>
+				: // In case of a generator function callback...
+					[ReturnType] extends [Generator | AsyncGenerator]
+					? IfGeneratorAsync<
+							ReturnType,
+							AsyncResult<
+								InferGeneratorReturn<ReturnType> | InferValue<This>,
+								InferGeneratorError<ReturnType> | ErrorType
+							>,
+							OuterResult<
+								InferGeneratorReturn<ReturnType> | InferValue<This>,
+								InferGeneratorError<ReturnType> | ErrorType
+							>
 						>
-					: never
-				: IfReturnsAsync<
-						ReturnType,
-						ReturnType extends U
+					: // In case of an async function callback...
+						[ReturnType] extends [Promise<infer PValue>]
+						? PValue extends U
 							? AsyncResult<
 									InferValue<This> | ExtractValue<U>,
 									ExtractError<U> | ErrorType
 								>
-							: never,
-						ReturnType extends U
-							? OuterResult<
-									InferValue<This> | ExtractValue<U>,
-									ExtractError<U> | ErrorType
-								>
 							: never
-					>;
+						: // In case of a regular function callback...
+							IfReturnsAsync<
+								ReturnType,
+								ReturnType extends U
+									? AsyncResult<
+											InferValue<This> | ExtractValue<U>,
+											ExtractError<U> | ErrorType
+										>
+									: never,
+								ReturnType extends U
+									? OuterResult<
+											InferValue<This> | ExtractValue<U>,
+											ExtractError<U> | ErrorType
+										>
+									: never
+							>;
 	}
 
 	/**

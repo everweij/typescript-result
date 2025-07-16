@@ -2465,9 +2465,6 @@ describe("Result", () => {
 					return 12;
 				});
 				expect(recoveredResult).toBeInstanceOf(AsyncResult);
-				expectTypeOf(recoveredResult).toEqualTypeOf<
-					AsyncResult<number, Error>
-				>();
 				Result.assertOk(await recoveredResult);
 				expect(spy).not.toHaveBeenCalled();
 			});
@@ -2627,6 +2624,60 @@ describe("Result", () => {
 		expectTypeOf(resultB).toEqualTypeOf<Result.Ok<number>>();
 		expectTypeOf(resultB.value).toBeNumber();
 		expectTypeOf(resultB.error).toBeUndefined();
+	});
+
+	it("should disregard any mapped values after a result can only be a failure", () => {
+		const syncFailure = Result.error(new ErrorA());
+		const asyncFailure = AsyncResult.error(new ErrorA());
+
+		const resultA = syncFailure.map((value) => {
+			expectTypeOf(value).toEqualTypeOf<never>();
+			return Result.ok(12);
+		});
+		expectTypeOf(resultA).toEqualTypeOf<Result<never, ErrorA>>();
+
+		const resultB = syncFailure.map(async () => Result.ok(12));
+		// It should disregard the async mapping as well
+		expectTypeOf(resultB).toEqualTypeOf<Result<never, ErrorA>>();
+
+		const resultC = syncFailure.mapCatching(() => Result.ok(12));
+		expectTypeOf(resultC).toEqualTypeOf<Result<never, ErrorA>>();
+
+		const resultD = asyncFailure.map((value) => {
+			expectTypeOf(value).toEqualTypeOf<never>();
+			return Result.ok(12);
+		});
+		expectTypeOf(resultD).toEqualTypeOf<AsyncResult<never, ErrorA>>();
+
+		const resultE = asyncFailure.mapCatching((value) => {
+			expectTypeOf(value).toEqualTypeOf<never>();
+			return Result.ok(12);
+		});
+		expectTypeOf(resultE).toEqualTypeOf<AsyncResult<never, ErrorA>>();
+	});
+
+	it("should disregard any recovered errors after a result can only be a success", () => {
+		const syncSuccess = Result.ok(12);
+		const asyncSuccess = AsyncResult.ok(12);
+
+		const resultA = syncSuccess.recover(() => Result.error(new ErrorA()));
+		expectTypeOf(resultA).toEqualTypeOf<Result<number, never>>();
+
+		const resultB = syncSuccess.recover(async () => Result.error(new ErrorA()));
+		expectTypeOf(resultB).toEqualTypeOf<Result<number, never>>();
+
+		const resultC = syncSuccess.recoverCatching(() =>
+			Result.error(new ErrorA()),
+		);
+		expectTypeOf(resultC).toEqualTypeOf<Result<number, never>>();
+
+		const resultD = asyncSuccess.recover(() => Result.error(new ErrorA()));
+		expectTypeOf(resultD).toEqualTypeOf<AsyncResult<number, never>>();
+
+		const resultE = asyncSuccess.recoverCatching(() =>
+			Result.error(new ErrorA()),
+		);
+		expectTypeOf(resultE).toEqualTypeOf<AsyncResult<number, never>>();
 	});
 });
 

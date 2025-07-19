@@ -158,9 +158,6 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 */
 	declare $inferError: Err;
 
-	/**
-	 * @internal
-	 */
 	*[Symbol.iterator](): Generator<{ error: Err; async: true }, Value, any> {
 		return yield this as any;
 	}
@@ -794,9 +791,6 @@ export class Result<Value, Err> {
 	 */
 	declare $inferError: Err;
 
-	/**
-	 * @internal
-	 */
 	*[Symbol.iterator](): Generator<{ error: Err; async: false }, Value, any> {
 		return yield this as any;
 	}

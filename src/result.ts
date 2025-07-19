@@ -14,6 +14,7 @@ import {
 	isPromise,
 } from "./helpers.js";
 import type { Result as OuterResult } from "./index.js";
+import { Matcher } from "./matcher.js";
 
 type InferError<T> = T extends AsyncResult<any, infer Error>
 	? Error
@@ -372,7 +373,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			(resolve, reject) =>
 				this.then(async (result) => {
 					try {
-						if (result.isError()) {
+						if (!result.ok) {
 							await action(result.error as InferError<This>);
 						}
 						resolve(result as OuterResult<InferValue<This>, InferError<This>>);
@@ -420,7 +421,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			(resolve, reject) =>
 				this.then(async (result) => {
 					try {
-						if (result.isOk()) {
+						if (result.ok) {
 							await action(result.value as InferValue<This>);
 						}
 						resolve(result as OuterResult<InferValue<This>, InferError<This>>);
@@ -807,7 +808,7 @@ export class Result<Value, Err> {
 	 *
 	 * @returns The value if the operation was successful, otherwise `undefined`.
 	 *
-	 * __Note:__ You can use {@linkcode Result.isOk} to narrow down the type to a successful result.
+	 * __Note:__ You can use {@linkcode Result.ok} to narrow down the type to a successful result.
 	 *
 	 * @example
 	 * obtaining the value of a result, without checking if it's successful
@@ -822,7 +823,7 @@ export class Result<Value, Err> {
 	 * ```ts
 	 * declare const result: Result<number, Error>;
 	 *
-	 * if (result.isOk()) {
+	 * if (result.ok) {
 	 *   result.value; // number
 	 * }
 	 * ```
@@ -837,7 +838,7 @@ export class Result<Value, Err> {
 	 * @returns The error if the operation failed, otherwise `undefined`.
 	 *
 	 * > [!NOTE]
-	 * > You can use {@linkcode Result.isError} to narrow down the type to a failed result.
+	 * > You can use {@linkcode Result.ok} to narrow down the type to a failed result.
 	 *
 	 * @example
 	 * obtaining the value of a result, without checking if it's a failure
@@ -852,7 +853,7 @@ export class Result<Value, Err> {
 	 * ```ts
 	 * declare const result: Result<number, Error>;
 	 *
-	 * if (result.isError()) {
+	 * if (!result.ok) {
 	 *   result.error; // Error
 	 * }
 	 * ```
@@ -869,7 +870,12 @@ export class Result<Value, Err> {
 		return this.error !== undefined;
 	}
 
+	get ok() {
+		return this.success as [Err] extends [never] ? true : false;
+	}
+
 	/**
+	 * @deprecated use {@linkcode Result.ok} instead.
 	 * Type guard that checks whether the result is successful.
 	 *
 	 * @returns `true` if the result is successful, otherwise `false`.
@@ -889,6 +895,7 @@ export class Result<Value, Err> {
 	}
 
 	/**
+	 * @deprecated use {@linkcode Result.ok} instead.
 	 * Type guard that checks whether the result is successful.
 	 *
 	 * @returns `true` if the result represents a failure, otherwise `false`.
@@ -1079,6 +1086,48 @@ export class Result<Value, Err> {
 		) as Contains<SuccessResult | FailureResult, AnyPromise> extends true
 			? Promise<Awaited<SuccessResult> | Awaited<FailureResult>>
 			: SuccessResult | FailureResult;
+	}
+
+	/**
+	 * Allows you to effectively match the errors of a failed result using the returned instance of the {@link Matcher} class.
+	 * Note: this method can only be called on a failed result, otherwise it will return `undefined`. You can narrow the result
+	 * by checking the `ok` property.
+	 *
+	 * @returns {@link Matcher} instance that can be used to build a chain of matching patterns for the errors of the result.
+	 *
+	 * @example
+	 * Matching against error classes
+	 * ```ts
+	 * declare const result: Result<number, NotFoundError | UserDeactivatedError>;
+	 *
+	 * if (!result.ok) {
+	 *   return result
+	 *     .match()
+	 * 		   .when(NotFoundError, (error) => console.error("User not found", error))
+	 * 		   .when(UserDeactivatedError, (error) => console.error("User is deactivated", error))
+	 *       .run()
+	 * }
+	 * ```
+	 *
+	 * @example
+	 * Matching against string constants with an else clause
+	 * ```ts
+	 * declare const result: Result<number, "not-found" | "user-deactivated">;
+	 * if (!result.ok) {
+	 *   return result
+	 *     .match()
+	 * 		   .when("not-found", (error) => console.error("User not found", error))
+	 *       .else((error) => console.error("Unknown error", error))
+	 *       .run()
+	 * }
+	 * ```
+	 */
+	match<This extends AnyResult>(this: This) {
+		return (this.failure ? new Matcher(this._error) : undefined) as [
+			InferValue<This>,
+		] extends [never]
+			? Matcher<InferError<This>>
+			: "'match()' can only be called on a failed result. Please narrow the result by checking the 'ok' property.";
 	}
 
 	/**
@@ -1588,6 +1637,8 @@ export class ResultFactory {
 	 * const result = Result.error(new NotFoundError()); // Result.Error<NotFoundError>
 	 * ```
 	 */
+	static error<const Err extends string>(error: Err): OuterResult.Error<Err>;
+	static error<Err>(error: Err): OuterResult.Error<Err>;
 	static error<Err>(error: Err): OuterResult.Error<Err> {
 		return new Result(undefined as never, error);
 	}
@@ -1655,7 +1706,7 @@ export class ResultFactory {
 
 				const returnValue = runner(item as AnyFunction);
 
-				if (ResultFactory.isResult(returnValue) && returnValue.isError()) {
+				if (ResultFactory.isResult(returnValue) && !returnValue.ok) {
 					hasFailure = true;
 					if (!isAsync) {
 						return returnValue;
@@ -1668,7 +1719,7 @@ export class ResultFactory {
 
 				flattened.push(returnValue);
 			} else if (ResultFactory.isResult(item)) {
-				if (item.isError()) {
+				if (!item.ok) {
 					hasFailure = true;
 					if (!isAsync) {
 						return item;
@@ -1712,8 +1763,8 @@ export class ResultFactory {
 							merged[asyncIndexes[i]!] = resolvedResults[i]!;
 						}
 
-						const firstFailedResult = merged.find((resolvedResult) =>
-							resolvedResult.isError(),
+						const firstFailedResult = merged.find(
+							(resolvedResult) => !resolvedResult.ok,
 						);
 						if (firstFailedResult) {
 							resolve(firstFailedResult);
@@ -2038,7 +2089,7 @@ export class ResultFactory {
 
 	private static handleGenerator(it: Generator | AsyncGenerator) {
 		function handleResult(result: AnyResult) {
-			if (result.isError()) {
+			if (!result.ok) {
 				return iterate(it.return(result));
 			}
 
@@ -2241,7 +2292,7 @@ export class ResultFactory {
 	static assertOk<Value>(
 		result: OuterResult<Value, any>,
 	): asserts result is OuterResult<Value, never> {
-		if (result.isError()) {
+		if (!result.ok) {
 			throw new Error("Expected a successful result, but got an error instead");
 		}
 	}
@@ -2255,7 +2306,7 @@ export class ResultFactory {
 	static assertError<Err>(
 		result: OuterResult<any, Err>,
 	): asserts result is OuterResult<never, Err> {
-		if (result.isOk()) {
+		if (result.ok) {
 			throw new Error("Expected a failed result, but got a value instead");
 		}
 	}

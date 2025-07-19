@@ -8,7 +8,7 @@ The goal is to keep the effort in using this library as _light as possible_, wit
 
 
 ```typescript twoslash
-// @errors: 7030
+// @errors: 2349
 import { Result } from "typescript-result";
 
 class NotEnoughStockError extends Error {
@@ -68,25 +68,24 @@ function handleOrder(userId: number) {
     getUserAccount(userId)
   );
 
-  return result.fold(
-    (order) => ({
-      status: 200,
-      body: `Order with id ${order.id} placed successfully`,
-    }),
-    (error) => {
-      switch(error.type) {
-        case "insufficient-balance":
-          return {
-            status: 400,
-            body: "Insufficient balance",
-          }
-      }
-    }
-  )
+  if (!result.ok) {
+    return result
+      .match()
+      .when(InsufficientBalanceError, () => ({
+        status: 400,
+        body: "Insufficient balance",
+      }))
+      .run();
+  }
+
+  return {
+    status: 200,
+    body: `Order with id ${result.value.id} placed successfully`,
+  }
 }
 ```
 
-In the example above, TypeScript will notify us that not all code paths return a value. Rightfully so, because we forgot to implement the case where there is not enough stock. This is a great example of how TypeScript can help us catch potential bugs early in the development process, and how using a Result type can make error handling more explicit and structured.
+In the example above, TypeScript will notify us that we did not handle all possible failures. Rightfully so, because we forgot to implement the case where there is not enough stock. This is a great example of how TypeScript can help us catch potential bugs early in the development process, and how using a Result type can make error handling more explicit and structured.
 
 ## Let type inference do the heavy lifting
 
@@ -98,11 +97,11 @@ Result instances that are wrapped in a Promise can be painful to work with, beca
 
 ```typescript
 const firstAsyncResult = await someAsyncFunction1(); // [!code --]
-if (firstAsyncResult.isOk()) { // [!code --]
+if (firstAsyncResult.ok) { // [!code --]
   const secondAsyncResult = await someAsyncFunction2(firstAsyncResult.value); // [!code --]
-  if (secondAsyncResult.isOk()) { // [!code --]
+  if (secondAsyncResult.ok) { // [!code --]
     const thirdAsyncResult = await someAsyncFunction3(secondAsyncResult.value); // [!code --]
-    if (thirdAsyncResult.isOk()) { // [!code --]
+    if (thirdAsyncResult.ok) { // [!code --]
       // do something  // [!code --]
     } else {  // [!code --]
       // handle error  // [!code --]

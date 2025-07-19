@@ -73,6 +73,8 @@ export type IsFunction<T> = T extends AnyFunction ? true : false;
 
 export type AnyPromise = Promise<any>;
 
+export type Constructor<T> = abstract new (...args: any[]) => T;
+
 export type AnyFunction<Returning = any> = (...args: any[]) => Returning;
 export type AnyAsyncFunction<Returning = any> = (
 	...args: any[]

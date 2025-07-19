@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
-import { AsyncResult, Result } from "./index.js";
+import { AsyncResult, NonExhaustiveError, Result } from "./index.js";
+import type { RedundantElseClauseError } from "./matcher.js";
 
 class CustomError extends Error {}
 
@@ -2511,6 +2512,188 @@ describe("Result", () => {
 				const resolvedRecoveredResult = await recoveredResult;
 				Result.assertOk(resolvedRecoveredResult);
 				expect(resolvedRecoveredResult.value).toBe(12);
+			});
+		});
+
+		describe("match", () => {
+			it("allows you to define handlers for specific error cases when the result is a failure", () => {
+				const result = Result.error(new ErrorA()) as Result<
+					"some value",
+					ErrorA | ErrorB
+				>;
+
+				expectTypeOf(
+					result.match(),
+				).toEqualTypeOf<"'match()' can only be called on a failed result. Please narrow the result by checking the 'ok' property.">();
+
+				expect(result.ok).toBe(false);
+
+				if (!result.ok) {
+					const outcome = result
+						.match()
+						.when(ErrorA, (error) => {
+							expectTypeOf(error).toEqualTypeOf<ErrorA>();
+							return "a" as const;
+						})
+						.when(ErrorB, (error) => {
+							expectTypeOf(error).toEqualTypeOf<ErrorB>();
+							return "b" as const;
+						})
+						.run();
+
+					expectTypeOf(outcome).toEqualTypeOf<"a" | "b">();
+					expect(outcome).toEqual("a");
+				}
+			});
+
+			it("throws when trying to match on a successful result", () => {
+				const result = Result.ok();
+
+				expect(() =>
+					result
+						.match()
+						// @ts-expect-error
+						.when(ErrorA, () => 12),
+				).toThrow(/undefined/);
+			});
+
+			it("returns a promise when one of the handlers is async", async () => {
+				const resultA = Result.error(new ErrorA()) as Result<
+					"some value",
+					ErrorA | ErrorB
+				>;
+				const resultB = Result.error(new ErrorB()) as Result<
+					"some value",
+					ErrorA | ErrorB
+				>;
+
+				Result.assertError(resultA);
+				Result.assertError(resultB);
+
+				const outcomeA = resultA
+					.match()
+					.when(ErrorA, () => "a" as const)
+					.when(ErrorB, async () => "b" as const)
+					.run();
+
+				expectTypeOf(outcomeA).toEqualTypeOf<Promise<"a" | "b">>();
+				expect(outcomeA).toBeInstanceOf(Promise);
+				const resolvedA = await outcomeA;
+				expect(resolvedA).toBe("a");
+
+				const outcomeB = resultB
+					.match()
+					.when(ErrorA, () => "a" as const)
+					.when(ErrorB, async () => "b" as const)
+					.run();
+
+				expectTypeOf(outcomeB).toEqualTypeOf<Promise<"a" | "b">>();
+				expect(outcomeB).toBeInstanceOf(Promise);
+				const resolvedB = await outcomeB;
+				expect(resolvedB).toBe("b");
+			});
+
+			it("allows you to combine multiple cases in one when-statement", () => {
+				const result = Result.error(new ErrorA()) as Result.Error<
+					ErrorA | ErrorB
+				>;
+
+				const outcome = result
+					.match()
+					.when(ErrorA, ErrorB, (error) => {
+						expectTypeOf(error).toEqualTypeOf<ErrorA | ErrorB>();
+						return error.type;
+					})
+					.run();
+
+				expectTypeOf(outcome).toBeString();
+				expect(outcome).toBe("a");
+			});
+
+			it("throws when an unexpected case was reached", () => {
+				const err = new ErrorA();
+				const result = Result.error(err) as Result.Error<ErrorA | ErrorB>;
+
+				expectTypeOf(result.match().when(ErrorB, () => "b").run).toEqualTypeOf<
+					NonExhaustiveError<ErrorA>
+				>();
+
+				expect(() =>
+					result
+						.match()
+						.when(ErrorB, () => "b")
+						// @ts-expect-error
+						.run(),
+				).to.toThrowError(new NonExhaustiveError(err));
+			});
+
+			it("accepts literal values as well", () => {
+				const result = Result.error("error-c") as Result.Error<
+					"error-a" | "error-b" | "error-c"
+				>;
+
+				const outcome = result
+					.match()
+					.when("error-a", () => "a")
+					.when("error-b", "error-c", () => "b-or-c")
+					.run();
+
+				expect(outcome).toBe("b-or-c");
+			});
+
+			it("accepts an 'else' case", () => {
+				const resultA = Result.error(new ErrorA()) as Result.Error<
+					ErrorA | ErrorB
+				>;
+				const resultB = Result.error(new ErrorB()) as Result.Error<
+					ErrorA | ErrorB
+				>;
+
+				const outcomeA = resultA
+					.match()
+					.when(ErrorA, () => "a" as const)
+					.else((error) => {
+						expectTypeOf(error).toEqualTypeOf<ErrorB>();
+						return "else" as const;
+					})
+					.run();
+
+				expectTypeOf(outcomeA).toEqualTypeOf<"a" | "else">();
+				expect(outcomeA).toBe("a");
+
+				const outcomeB = resultB
+					.match()
+					.when(ErrorA, () => "a" as const)
+					.else(() => "else" as const)
+					.run();
+
+				expect(outcomeB).toBe("else");
+			});
+
+			it("does not allow you to call 'else' when all cases are already handled", () => {
+				const result = Result.error(new ErrorA()) as Result.Error<
+					ErrorA | ErrorB
+				>;
+
+				expectTypeOf(
+					result.match().when(ErrorA, ErrorB, () => "foo").else,
+				).toEqualTypeOf<
+					RedundantElseClauseError<"All error cases are already handled">
+				>();
+			});
+
+			it("does not allow you to use 'else' more than once", () => {
+				const result = Result.error(new ErrorA()) as Result.Error<
+					ErrorA | ErrorB
+				>;
+
+				expect(() =>
+					result
+						.match()
+						.else(() => "else")
+						// @ts-expect-error
+						.else(() => "else2"),
+				).toThrow(/already registered/);
 			});
 		});
 	});

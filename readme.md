@@ -95,20 +95,17 @@ const result = await Result.gen(function* () {
   return parseConfig(json);
 });
 
-const [config, error] = result.toTuple();
-
-if (error) {
-  switch (error.type) {
-    case "io-error":
-      return "Please check if the config file exists and is readable";
-    case "parse-error":
-      return "Please check if the config file contains valid JSON";
-    case "validation-error":
-      return error.message;
-  }
+if (!result.ok) {
+  return result
+    .match()
+    .when(IOError, () => "Please check if the config file exists and is readable")
+    .when(ParseError, () => "Please check if the config file contains valid JSON")
+    .when(ValidationError, (error) => `Invalid config: ${error.message}`)
+    .run();
 }
 
-return `Successfully read config: name => ${config.name}, version => ${config.version}`;
+const { name, version } = result.value;
+return `Successfully read config: name => ${name}, version => ${version}`;
 ```
 
 For more examples, please check out the other [examples](https://www.typescript-result.dev/examples/).

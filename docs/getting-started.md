@@ -152,10 +152,9 @@ function readConfig(filePath: string) {
 
 const result = readConfig("config.json");
 //     ^?
-
-
-//
 ```
+
+<div class="spacer" />
 
 If you look at the final `result`, you'll see exactly what the outcome of the function can be. And while technically the above code is correct, it is very verbose. Luckily, the library provides a way to make this code more concise.
 
@@ -194,7 +193,7 @@ function readConfig(filePath: string) {
     () => fs.readFileSync(filePath, "utf-8"),
     (error) => new IOError(`Unable to read file: ${filePath}`, { cause: error })
   );
-  if (contentResult.isError()) {
+  if (!contentResult.ok) {
     return contentResult;
   }
 
@@ -202,7 +201,7 @@ function readConfig(filePath: string) {
     () => JSON.parse(contentResult.value),
     () => new ParseError(`Unable to parse JSON from file: ${filePath}`)
   );
-  if (jsonResult.isError()) {
+  if (!jsonResult.ok) {
     return jsonResult;
   }
   
@@ -266,12 +265,12 @@ const parseConfig = Result.wrap(
 
 function readConfig(filePath: string) {
   const contentResult = readFile(filePath);
-  if (contentResult.isError()) {
+  if (!contentResult.ok) {
     return contentResult;
   }
 
   const jsonResult = parseJSON(contentResult.value);
-  if (jsonResult.isError()) {
+  if (!jsonResult.ok) {
     return jsonResult;
   }
   
@@ -360,7 +359,7 @@ Remember this pattern from a few examples back?
 
 ```typescript
 const result = operation();
-if (result.isError()) {
+if (!result.ok) {
   return result;
 }
 ```

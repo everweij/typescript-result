@@ -9,6 +9,7 @@ import {
 	ResultFactory,
 } from "./result.js";
 
+export { NonExhaustiveError } from "./matcher.js";
 export { AsyncResult } from "./result.js";
 
 export namespace Result {

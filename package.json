@@ -1,7 +1,7 @@
 {
   "private": false,
   "name": "typescript-result",
-  "version": "3.4.1",
+  "version": "3.5.0-beta.1",
   "description": "Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code.",
   "keywords": [
     "result",
@@ -73,6 +73,7 @@
     "monaco-editor": "^0.52.2",
     "prettier": "^3.6.2",
     "terser": "^5.43.1",
+    "ts-pattern": "^5.7.1",
     "tsup": "^8.5.0",
     "typedoc": "^0.28.7",
     "typedoc-plugin-markdown": "^4.7.0",

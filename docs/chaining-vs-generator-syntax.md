@@ -23,11 +23,11 @@ Similar to arrays and promises, you can also chain operations on a result. The m
 ```ts
 // Without chaining
 const resultA = someOperation();
-if (resultA.isOk()) {
+if (resultA.ok) {
   const resultB = anotherOperation(resultA.value);
-  if (resultB.isOk()) {
+  if (resultB.ok) {
     const resultC = yetAnotherOperation(resultB.value);
-    if (resultC.isOk()) {
+    if (resultC.ok) {
       // do something
     } else {
       // handle error
@@ -44,7 +44,7 @@ const result = someOperation()
   .map((value) => anotherOperation(value))
   .map((value) => yetAnotherOperation(value))
 
-if (result.isOk()) {
+if (result.ok) {
   // do something
 } else {
   // handle error

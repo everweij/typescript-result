@@ -2,9 +2,9 @@
 
 At some point in the flow of your program, you want to retrieve the value of a successful result or the error of a failed result. There are a couple of ways to do this, depending on your use case.
 
-## Narrowing the Result using `isOk()` or `isError()`
+## Narrowing the Result using `ok`
 
-The most basic and imperative approach is to use the `isOk()` and `isError()` methods to narrow down the type of the result, and use the `value` or `error` getters to retrieve the value or error.
+The most basic and imperative approach is to use the `ok` getter to narrow down the type of the result, and use the `value` or `error` getters to retrieve the value or error.
 
 ::: info
 You can access the `value` and `error` properties directly, but this is not recommended as it does not narrow the type of the result; it might add `undefined` to the type because TS cannot guarantee that the result is successful or failed.
@@ -27,7 +27,7 @@ declare const result: Result<string, ErrorA | ErrorB>;
 result.value; // string | undefined
 result.error; // ErrorA | ErrorB | undefined
 
-if (result.isOk()) {
+if (result.ok) {
   result.value; // must be string
 } else {
   result.error; // must be ErrorA | ErrorB

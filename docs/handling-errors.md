@@ -6,9 +6,313 @@ Make sure to read the [a note on errors](/a-note-on-errors.md) before diving int
 
 So, you ended up with a nice `Result` instance with various error types. But how do you handle these errors effectively? We already saw how we can [unwrap](/unwrapping-a-result) a result to access the encapsulated value or error. Doing something useful with the value seems straightforward, but what about the error?
 
-## `switch` is your friend
+## Using `match()`
 
-Until javascript introduces [pattern matching](https://github.com/tc39/proposal-pattern-matching) often a good 'ol `switch` does the trick remarkably well. It allows you to handle different error types in a clean and structured way. Here's an example:
+For most error handling scenarios, the `match()` method is your best friend. It allows you to handle different error types in a clean and structured way, with exhaustive checks already baked-in. Here's an example:
+
+```ts twoslash
+import { Result } from "typescript-result";
+
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB>;
+
+if (!result.ok) {
+  result
+    .match()
+    .when(ErrorA, (error) => console.error("Error A:", error.message))
+    .when(ErrorB, (error) => console.error("Error B:", error.message))
+    .run();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+```
+
+As you can see, `when` allows you to specify a handler for specific cases, and `run()` executes the matched handler.
+
+The `when` method takes either a class constructor for a specific error type (useful for class-based errors) or any other value that represents your errors (e.g. string contants, enums, etc.).
+
+In the example above, we are simple logging the error message, but often you will want to return some kind of value, e.g. a http error response. `match()` will return a union type of all the handler's return types:
+
+```ts twoslash
+import { Result } from "typescript-result";
+
+class UserNotFoundError extends Error {
+  readonly type = "user-not-found-error";
+}
+class ValidationError extends Error {
+  readonly type = "validation-error";
+}
+type User = { id: number };
+// ---cut-before---
+declare const result: Result<User, UserNotFoundError | ValidationError>;
+
+function routeHandler() {
+  if (!result.ok) {
+    return result
+      .match()
+      .when(UserNotFoundError, (error) => ({
+        status: 404,
+        body: { error: error.type },
+      } as const))
+      .when(ValidationError, (error) => ({
+        status: 400,
+        body: { error: error.type, message: error.message },
+      } as const))
+      .run();
+  }
+
+  return {
+    status: 200,
+    body: result.value,
+  } as const;
+}
+```
+
+::: warning
+
+You can only use `match()` on a `Result` instance that has been narrowed to a _failure_. In other words, you must first ensure that the result is not ok, otherwise TypeScript will give you an error:
+
+
+```ts twoslash
+// @errors: 2339
+import { Result } from "typescript-result";
+
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB>;
+
+// We did not check `result.ok` first, so TypeScript will complain:
+result.match().when()
+```
+
+:::
+
+### Auto exhaustive checks
+
+The nice thing about `match()` is that it automatically checks if you've handled all possible error cases. If you forget to handle a specific error type, TypeScript will give you an error at compile time (or an exception is thrown at runtime):
+
+```ts twoslash
+// @errors: 2349
+import { Result } from "typescript-result";
+
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB>;
+
+if (!result.ok) {
+  result
+    .match()
+    .when(ErrorA, (error) => console.error("Error A:", error.message))
+    .run();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+```
+
+As you can see, TypeScript informs us that we forgot to handle `ErrorB`. This is a great way to ensure that your error handling is complete and that you don't accidentally miss any error cases.
+
+### Multiple error types for a single handler
+
+With `switch` statements you can group `case`s together. You can do the same with `when` by passing multiple error types as arguments. The last argument should always be the handler function:
+
+```ts twoslash
+import { Result } from "typescript-result";
+
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+class ErrorC extends Error {
+  readonly type = "error-c";
+}
+
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB | ErrorC>;
+
+if (!result.ok) {
+  result
+    .match()
+    // Handle ErrorA and ErrorB with the same handler
+    .when(ErrorA, ErrorB, () => console.error("Error A or B"))
+    .when(ErrorC, () => console.error("Error C"))
+    .run();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+```
+
+### Fallback behavior with `else()`
+
+If you want to handle the case where none of the specified error types match, you can use the `else()` method. This is useful for handling fallback behavior for instance:
+
+```ts twoslash
+import { Result } from "typescript-result";
+
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+class ErrorC extends Error {
+  readonly type = "error-c";
+}
+
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB | ErrorC>;
+
+if (!result.ok) {
+  result
+    .match()
+    .when(ErrorA, () => console.error("Error A"))
+    .when(ErrorB, () => console.error("Error B"))
+    .else((error) => console.error("Other error:", error))
+    .run();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+```
+
+::: info
+
+There are two things to be aware of when using `else()`:
+
+- You can only use `else()` _once_. A second call to `else()` will result in both a compile and runtime error.
+- If you already have handled all error cases, you don't need to use `else()`, and to keep things concise, TypeScript will complain that the `else()` clause is unnecessary and probably a mistake:
+
+```ts twoslash
+// @errors: 2349 7006
+import { Result } from "typescript-result";
+
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB>;
+
+if (!result.ok) {
+  result
+    .match()
+    .when(ErrorA, () => console.error("Error A"))
+    .when(ErrorB, () => console.error("Error B"))
+    .else(() => console.error("Other error"))
+    .run();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+
+```
+:::
+
+### Async callbacks
+
+`match()` will return a promise if any of the provided handler callbacks are async:
+
+```ts twoslash
+import { Result } from "typescript-result";
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+// ---cut-before---
+declare const result: Result<string, ErrorA | ErrorB>;
+
+if (!result.ok) {
+  await result
+//^^^^^  
+    .match()
+    .when(ErrorA, async (error) => {
+      //          ^^^^^
+      // do something async...
+      console.error("Error A:", error.message);
+    })
+    .when(ErrorB, (error) => console.error("Error B:", error.message))
+    .run();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+```
+
+## Pattern matching libraries like `ts-pattern`
+
+If you have more complex error handling needs, you might want to consider using a pattern matching library like [ts-pattern](https://github.com/gvergnaud/ts-pattern). These libraries provide a more powerful and flexible way to handle errors, allowing you to match on complex patterns and extract values and errors from your results.
+
+Here's an example of how you can use `ts-pattern` to handle errors:
+
+```ts twoslash
+import { match, P } from "ts-pattern";
+import { Result } from "typescript-result";
+// ---cut-start---
+class ErrorA extends Error {
+  readonly type = "error-a";
+}
+class ErrorB extends Error {
+  readonly type = "error-b";
+}
+// ---cut-end---
+
+declare const result: Result<string, ErrorA | ErrorB>;
+
+// only match on success or failure
+match(result)
+  .with({ ok: false }, ({ error }) => console.log("Error:", error))
+  .with({ ok: true }, ({ value }) => console.log("Success:", value))
+  .exhaustive();
+
+// match on specific error types
+match(result)
+	.with({ error: P.instanceOf(ErrorA) }, ({ error }) =>
+		console.log("Handled ErrorA:", error),
+	)
+	.with({ error: P.instanceOf(ErrorB) }, ({ error }) =>
+		console.log("Handled ErrorB:", error),
+	)
+	.with({ ok: true }, ({ value }) => console.log("Handled success:", value))
+	.exhaustive();
+
+// handling errors only
+if (!result.ok) {
+  match(result.error)
+    .with(P.instanceOf(ErrorA), (error) => console.error("Error A:", error.message))
+    .with(P.instanceOf(ErrorB), (error) => console.error("Error B:", error.message))
+    .exhaustive();
+} else {
+  console.log("Everything went fine:", result.value);
+}
+
+```
+
+
+## `switch` or `if/else` can also be your friend
+
+Until javascript introduces [pattern matching](https://github.com/tc39/proposal-pattern-matching) and you really want to use native language feature, often a good 'ol `switch` does the trick remarkably well. It allows you to handle different error types in a clean and structured way. Here's an example:
 
 ```ts twoslash
 import { Result } from "typescript-result";
@@ -61,9 +365,9 @@ declare const result: Result<string, ErrorA | ErrorB>;
 const [value, error] = result.toTuple();
 
 if (error) {
-  if (error.type === "error-a") {
+  if (error instanceof ErrorA) {
     console.error("Error A occurred:", error.message);
-  } else if (error.type === "error-b") {
+  } else if (error instanceof ErrorB) {
     console.error("Error B occurred:", error.message);
   }
 } else {

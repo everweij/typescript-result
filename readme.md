@@ -17,7 +17,7 @@ Supercharge your TypeScript error handling with a powerful Result type that tran
 
 - **🧩 Simple and tiny, yet very powerful**
 
-  Thanks to the polymorphic operators, you only need to learn a few methods. And notice the small footprint: Only 1.9 KB minified and gzipped.
+  Thanks to the polymorphic operators, you only need to learn a few methods. And notice the small footprint: Only 2 KB minified and gzipped.
 
 - **✨ Full type inference without boilerplate**
 

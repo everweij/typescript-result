@@ -26,7 +26,7 @@ features:
 
   - icon: 🧩
     title: Simple and tiny, yet very powerful
-    details: "Thanks to the polymorphic operators, you only need to learn a few methods. And notice the small footprint: Only 1.9 KB minified and gzipped."
+    details: "Thanks to the polymorphic operators, you only need to learn a few methods. And notice the small footprint: Only 2 KB minified and gzipped."
 
   - icon: ✨
     title: Full type inference without boilerplate

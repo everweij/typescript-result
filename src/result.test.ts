@@ -2862,6 +2862,23 @@ describe("Result", () => {
 		);
 		expectTypeOf(resultE).toEqualTypeOf<AsyncResult<number, never>>();
 	});
+
+	it("Correctly infers the ok-value when there's some overlap with an Result instance", () => {
+		// See: https://github.com/everweij/typescript-result/issues/19
+
+		// { value: string } has some overlap with the Result type, so it seems like
+		// TS is very strict with `ReturningValue<T>` and returns never. The workaround seem
+		// to be to give `ExtractValue<T>` a fallback of `T`.
+		const resultA = Result.ok(12).map(() => ({ value: "bar" }));
+
+		expectTypeOf(resultA).toEqualTypeOf<Result.Ok<{ value: string }>>();
+
+		const resultB = Result.try(() => ({ data: { value: "string" } })).map(
+			({ data }) => data,
+		);
+
+		expectTypeOf(resultB).toEqualTypeOf<Result<{ value: string }, Error>>();
+	});
 });
 
 describe("AsyncResult", () => {

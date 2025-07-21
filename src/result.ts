@@ -42,7 +42,7 @@ type ReturningError<T> =
 	| AsyncResult<any, T>
 	| Promise<ReturningError<T>>;
 
-type ExtractValue<T> = T extends ReturningValue<infer Value> ? Value : never;
+type ExtractValue<T> = T extends ReturningValue<infer Value> ? Value : T;
 type ExtractError<T> = T extends ReturningError<infer Error> ? Error : never;
 
 type ExtractValues<T extends any[]> = {

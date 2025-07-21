@@ -6,6 +6,7 @@
 [![TYPESCRIPT](https://img.shields.io/badge/%3C%2F%3E-typescript-blue)](http://www.typescriptlang.org/)
 [![BundleJS](https://deno.bundlejs.com/badge?q=typescript-result)](https://bundlejs.com/?q=typescript-result)
 [![Weekly downloads](https://badgen.net/npm/dw/typescript-result)](https://badgen.net/npm/dw/typescript-result)
+[![Main workflow](https://github.com/everweij/typescript-result/actions/workflows/main.yml/badge.svg)](https://github.com/everweij/typescript-result/actions/workflows/main.yml)
 
 Supercharge your TypeScript error handling with a powerful Result type that transforms chaotic try-catch blocks into elegant, type-safe code—catching bugs at compile time while making async operations seamless and your code much harder to break.
 

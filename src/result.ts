@@ -757,7 +757,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		promise: AnyPromise,
 		transform?: (error: unknown) => unknown,
 	) {
-		return new AsyncResult((resolve) => {
+		return new AsyncResult((resolve, reject) => {
 			promise
 				.then((value) =>
 					resolve(
@@ -766,7 +766,8 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 				)
 				.catch((caughtError) => {
 					resolve(ResultFactory.error(transform?.(caughtError) ?? caughtError));
-				});
+				})
+				.catch(reject);
 		});
 	}
 }

@@ -214,6 +214,19 @@ describe("Result", () => {
 			expect(result.error).toBeInstanceOf(CustomError);
 		});
 
+		it("throws when exceptions are encountered in the transform function", async () => {
+			await expect(() =>
+				Result.try(
+					async (): Promise<number> => {
+						throw new CustomError();
+					},
+					(error) => {
+						throw error;
+					},
+				),
+			).rejects.toThrow(CustomError);
+		});
+
 		it("flattens another result-type when returned by the provided callback", () => {
 			const resultA = Result.try(() => Result.ok("some value"));
 			const resultB = Result.try(() => Result.error(new CustomError()));
@@ -927,6 +940,19 @@ describe("Result", () => {
 			Result.assertError(result);
 
 			expect(result.error).toBeInstanceOf(ErrorA);
+		});
+
+		it("throws when exceptions are encountered in the transform function", async () => {
+			await expect(() =>
+				Result.fromAsyncCatching(
+					async (): Promise<number> => {
+						throw new CustomError();
+					},
+					(error) => {
+						throw error;
+					},
+				),
+			).rejects.toThrow(CustomError);
 		});
 	});
 

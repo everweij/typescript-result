@@ -67,7 +67,7 @@ Let's refactor this code using a `Result` type to make these potential failures 
 
 ### Defining errors
 
-First, we need to define some errors so what we can distinguish between different error cases:
+First, we need to define some errors so that we can distinguish between different error cases:
 
 ```ts
 class IOError extends Error {
@@ -85,7 +85,7 @@ class ValidationError extends Error {
 
 ::: info
 Please disregard the `readonly type` property in the error classes for now. It's not necessary for the library to work, but it can be useful for type narrowing and debugging purposes.
-For more information, see [A note on errros](/a-note-on-errors).
+For more information, see [A note on errors](/a-note-on-errors).
 :::
 
 ### Returning a Result

@@ -13,8 +13,11 @@ export { NonExhaustiveError } from "./matcher.js";
 export { AsyncResult } from "./result.js";
 
 export namespace Result {
-	export type Error<E> = ResultBase<never, E>;
-	export type Ok<V> = ResultBase<V, never>;
+	type ResultOk<V> = ResultBase<V, never>;
+	type ResultError<E> = ResultBase<never, E>;
+
+	export type Ok<Value> = [Value] extends [never] ? never : ResultOk<Value>;
+	export type Error<E> = [E] extends [never] ? never : ResultError<E>;
 	export type InferError<T> = T extends AsyncResult<any, infer Error>
 		? Error
 		: T extends Result<any, infer Error>
@@ -34,9 +37,6 @@ export namespace Result {
 		: never;
 }
 
-type Ok<Value> = [Value] extends [never] ? never : Result.Ok<Value>;
-type Error<Err> = [Err] extends [never] ? never : Result.Error<Err>;
-
-export type Result<Value, Err> = Ok<Value> | Error<Err>;
+export type Result<Value, Err> = Result.Ok<Value> | Result.Error<Err>;
 
 export const Result: typeof ResultFactory = ResultFactory;

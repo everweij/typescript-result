@@ -3785,27 +3785,3 @@ describe("AsyncResult", () => {
 		});
 	});
 });
-
-// function bla() {
-// 	if (Math.random() > 0.5) {
-// 		return Result.ok(42);
-// 	}
-
-// 	if (Math.random() > 0.5) {
-// 		return Result.error(new ErrorB());
-// 	}
-
-// 	return Result.error(new ErrorA());
-// }
-
-// const x = bla().map((val) => val * 2);
-
-// if (x.isOk()) {
-// 	x; //=>
-// 	expectTypeOf(x.value).toBeNumber();
-// 	expectTypeOf(x.error).toBeUndefined();
-// } else {
-// 	x; //=>
-// 	expectTypeOf(x.value).toBeUndefined();
-// 	expectTypeOf(x.error).toEqualTypeOf<ErrorA | ErrorB>();
-// }

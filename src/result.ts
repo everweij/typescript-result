@@ -1640,7 +1640,7 @@ export class ResultFactory {
 	 */
 	static error<const Err extends string>(error: Err): OuterResult.Error<Err>;
 	static error<Err>(error: Err): OuterResult.Error<Err>;
-	static error<Err>(error: Err): OuterResult.Error<Err> {
+	static error<Err>(error: Err) {
 		return new Result(undefined as never, error);
 	}
 

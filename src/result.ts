@@ -77,14 +77,14 @@ type SyncOrAsyncGenerator<Y, R, N> =
 type YieldedError<Y> = Y extends { error: infer E } ? E : never;
 type YieldedAsync<Y> = Y extends { async: infer A } ? A : false;
 
-type IsGeneratorAsync2<Y, RAsync> = [YieldedAsync<Y>] extends [false]
+type IsGeneratorParamsAsync<Y, RAsync> = [YieldedAsync<Y>] extends [false]
 	? [RAsync] extends [never]
 		? false
 		: true
 	: true;
 
-type IfGeneratorAsync2<Y, RAsync, Yes, No> =
-	IsGeneratorAsync2<Y, RAsync> extends true ? Yes : No;
+type IfGeneratorParamsAsync<Y, RAsync, Yes, No> =
+	IsGeneratorParamsAsync<Y, RAsync> extends true ? Yes : No;
 
 type GenSync<Y, V, E, RAsync> = Generator<
 	Y,
@@ -2443,7 +2443,7 @@ export class ResultFactory {
 	// Sync generator function with possible async yields/returns
 	static gen<Y, V, E = never, RAsync = never>(
 		fn: () => GenSync<Y, V, E, RAsync>,
-	): IfGeneratorAsync2<
+	): IfGeneratorParamsAsync<
 		Y,
 		RAsync,
 		AsyncResult<V, YieldedError<Y> | E>,
@@ -2459,7 +2459,7 @@ export class ResultFactory {
 	static gen<This, Y, V, E = never, RAsync = never>(
 		self: This,
 		fn: (this: This) => GenSync<Y, V, E, RAsync>,
-	): IfGeneratorAsync2<
+	): IfGeneratorParamsAsync<
 		Y,
 		RAsync,
 		AsyncResult<V, YieldedError<Y> | E>,
@@ -2475,7 +2475,7 @@ export class ResultFactory {
 	// Direct sync generator
 	static gen<Y, V, E = never, RAsync = never>(
 		generator: GenSync<Y, V, E, RAsync>,
-	): IfGeneratorAsync2<
+	): IfGeneratorParamsAsync<
 		Y,
 		RAsync,
 		AsyncResult<V, YieldedError<Y> | E>,

@@ -1500,7 +1500,7 @@ describe("Result", () => {
 					| Result<number, never>;
 
 				if (result.isError()) {
-					expectTypeOf(result).toEqualTypeOf<Result.Error<ErrorA>>();
+					expectTypeOf(result).toEqualTypeOf<Result<never, ErrorA>>();
 				}
 			});
 		});
@@ -1923,7 +1923,7 @@ describe("Result", () => {
 			it("maps an encapsulated successful value to a next result using a transform function", () => {
 				const result = Result.ok(2);
 				const nextResult = result.map((value) => value * 2);
-				expectTypeOf(nextResult).toEqualTypeOf<Result<number, never>>();
+				expectTypeOf(nextResult).toEqualTypeOf<Result.Ok<number>>();
 				Result.assertOk(nextResult);
 				expect(nextResult.value).toBe(4);
 				expect(result).not.toBe(nextResult);
@@ -2851,14 +2851,14 @@ describe("Result", () => {
 			expectTypeOf(value).toEqualTypeOf<any>();
 			return Result.ok(12);
 		});
-		expectTypeOf(resultA).toEqualTypeOf<Result<never, ErrorA>>();
+		expectTypeOf(resultA).toEqualTypeOf<Result.Error<ErrorA>>();
 
 		const resultB = syncFailure.map(async () => Result.ok(12));
 		// It should disregard the async mapping as well
-		expectTypeOf(resultB).toEqualTypeOf<Result<never, ErrorA>>();
+		expectTypeOf(resultB).toEqualTypeOf<Result.Error<ErrorA>>();
 
 		const resultC = syncFailure.mapCatching(() => Result.ok(12));
-		expectTypeOf(resultC).toEqualTypeOf<Result<never, ErrorA>>();
+		expectTypeOf(resultC).toEqualTypeOf<Result.Error<ErrorA>>();
 
 		const resultD = asyncFailure.map((value) => {
 			expectTypeOf(value).toEqualTypeOf<any>();
@@ -2878,15 +2878,15 @@ describe("Result", () => {
 		const asyncSuccess = AsyncResult.ok(12);
 
 		const resultA = syncSuccess.recover(() => Result.error(new ErrorA()));
-		expectTypeOf(resultA).toEqualTypeOf<Result<number, never>>();
+		expectTypeOf(resultA).toEqualTypeOf<Result.Ok<number>>();
 
 		const resultB = syncSuccess.recover(async () => Result.error(new ErrorA()));
-		expectTypeOf(resultB).toEqualTypeOf<Result<number, never>>();
+		expectTypeOf(resultB).toEqualTypeOf<Result.Ok<number>>();
 
 		const resultC = syncSuccess.recoverCatching(() =>
 			Result.error(new ErrorA()),
 		);
-		expectTypeOf(resultC).toEqualTypeOf<Result<number, never>>();
+		expectTypeOf(resultC).toEqualTypeOf<Result.Ok<number>>();
 
 		const resultD = asyncSuccess.recover(() => Result.error(new ErrorA()));
 		expectTypeOf(resultD).toEqualTypeOf<AsyncResult<number, never>>();
@@ -3810,15 +3810,15 @@ describe("Issue #25: generic wrapper functions", () => {
 	});
 
 	it("Result.map with generic parameters", () => {
-		function wrapper<A extends string, E>(r: Result<A, E>): Result<A, E> {
+		function wrapper<A, E>(r: Result<A, E>): Result<A, E> {
 			const result = r.map((a) => a);
 			return result;
 		}
 
 		expectTypeOf(wrapper).returns.toEqualTypeOf<Result<unknown, unknown>>();
 
-		const result = wrapper(Result.ok(12));
-		expectTypeOf(result).toEqualTypeOf<Result.Ok<number>>();
+		const result = wrapper(Result.ok("hello"));
+		expectTypeOf(result).toEqualTypeOf<Result<string, never>>();
 	});
 
 	it("Result.gen with generic parameters", () => {
@@ -3832,7 +3832,7 @@ describe("Issue #25: generic wrapper functions", () => {
 		expectTypeOf(wrapperA).returns.toEqualTypeOf<Result<unknown, unknown>>();
 
 		const resultA = wrapperA(() => Result.ok(12));
-		expectTypeOf(resultA).toEqualTypeOf<Result.Ok<number>>();
+		expectTypeOf(resultA).toEqualTypeOf<Result<number, never>>();
 
 		const wrapperB = <A, E>(fn: () => AsyncResult<A, E>): AsyncResult<A, E> => {
 			return Result.gen(function* () {

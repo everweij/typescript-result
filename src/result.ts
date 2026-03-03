@@ -58,13 +58,13 @@ type ExtractErrors<T extends any[]> = {
 
 type ValueOr<Value, Err, Or> = [Err] extends [never]
 	? [Value] extends [never]
-		? Or
+		? never
 		: Value
 	: Value | Or;
 
 type ErrorOr<Value, Err, Or> = [Value] extends [never]
 	? [Err] extends [never]
-		? Or
+		? never
 		: Err
 	: Err | Or;
 
@@ -1304,12 +1304,35 @@ export class Result<Value, Err> {
 	 *   .map((value) => value * 2); // proceed with other operations
 	 * ```
 	 */
-	onFailure<This extends AnyResult, ReturnValue>(
+	// Error-specific async: preserves Result.Error<Err> display
+	onFailure(
+		this: Result<never, Err>,
+		action: (error: Err) => Promise<any>,
+	): AsyncResult<never, Err>;
+	// Error-specific sync: preserves Result.Error<Err> display
+	onFailure(
+		this: Result<never, Err>,
+		action: (error: Err) => any,
+	): OuterResult.Error<Err>;
+	// Ok-specific async: no-op on Ok, preserves Result.Ok<Value> display
+	onFailure(
+		this: Result<Value, never>,
+		action: (error: any) => Promise<any>,
+	): AsyncResult<Value, never>;
+	// Ok-specific sync: no-op on Ok, preserves Result.Ok<Value> display
+	onFailure(
+		this: Result<Value, never>,
+		action: (error: any) => any,
+	): OuterResult.Ok<Value>;
+	onFailure<This extends AnyResult>(
 		this: This,
-		action: (error: Err) => ReturnValue,
-	): ReturnValue extends AnyPromise
-		? AsyncResult<InferValue<This>, InferError<This>>
-		: OuterResult<InferValue<This>, InferError<This>> {
+		action: (error: InferError<This>) => Promise<any>,
+	): AsyncResult<InferValue<This>, InferError<This>>;
+	onFailure<This extends AnyResult>(
+		this: This,
+		action: (error: InferError<This>) => any,
+	): OuterResult<InferValue<This>, InferError<This>>;
+	onFailure(action: (error: Err) => unknown): unknown {
 		const isAsync = isAsyncFn(action);
 
 		if (this.failure) {
@@ -1357,6 +1380,26 @@ export class Result<Value, Err> {
 	 * const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(value));
 	 * ```
 	 */
+	// Error-specific async: no-op on Error, preserves Result.Error<Err> display
+	onSuccess(
+		this: Result<never, Err>,
+		action: (value: any) => Promise<void>,
+	): AsyncResult<never, Err>;
+	// Error-specific sync: no-op on Error, preserves Result.Error<Err> display
+	onSuccess(
+		this: Result<never, Err>,
+		action: (value: any) => void,
+	): OuterResult.Error<Err>;
+	// Ok-specific async: preserves AsyncResult<Value, never> for async callbacks
+	onSuccess(
+		this: Result<Value, never>,
+		action: (value: Value) => Promise<void>,
+	): AsyncResult<Value, never>;
+	// Ok-specific sync: preserves Result.Ok<Value> display
+	onSuccess(
+		this: Result<Value, never>,
+		action: (value: Value) => void,
+	): OuterResult.Ok<Value>;
 	onSuccess<This extends AnyResult>(
 		this: This,
 		action: (value: InferValue<This>) => Promise<void>,
@@ -1450,7 +1493,7 @@ export class Result<Value, Err> {
 	map(
 		this: Result<never, Err>,
 		transform: (value: any) => any,
-	): OuterResult<never, Err>;
+	): OuterResult.Error<Err>;
 	// Generator/AsyncGenerator
 	map<This extends AnyResult, RT extends Generator | AsyncGenerator>(
 		this: This,
@@ -1495,6 +1538,11 @@ export class Result<Value, Err> {
 		this: This,
 		transform: (value: InferValue<This>) => Promise<V>,
 	): AsyncResult<V, InferError<This>>;
+	// Ok-specific: preserves Result.Ok<V> display when this is a pure-Ok result
+	map<V>(
+		this: Result<Value, never>,
+		transform: (value: Value) => V,
+	): OuterResult.Ok<V>;
 	// Catch-all (plain V) — handles generics and structural overlap
 	map<This extends AnyResult, V>(
 		this: This,
@@ -1523,7 +1571,7 @@ export class Result<Value, Err> {
 		this: Result<never, Err>,
 		transformValue: (value: any) => any,
 		transformError?: (err: unknown) => any,
-	): OuterResult<never, Err>;
+	): OuterResult.Error<Err>;
 	// Generator/AsyncGenerator
 	mapCatching<
 		This extends AnyResult,
@@ -1618,18 +1666,26 @@ export class Result<Value, Err> {
 	 * result.mapError((error) => new ErrorB(error.message)); // Result<number, ErrorB>
 	 * ```
 	 */
+	// Ok-specific: no-op on Ok, preserves Result.Ok<Value> display
+	mapError(
+		this: Result<Value, never>,
+		transform: (error: any) => any,
+	): OuterResult.Ok<Value>;
+	// Error-specific: preserves Result.Error<NewError> display
+	mapError<NewError>(
+		this: Result<never, Err>,
+		transform: (error: Err) => NewError,
+	): OuterResult.Error<NewError>;
 	mapError<This extends AnyResult, NewError>(
 		this: This,
 		transform: (error: InferError<This>) => NewError,
-	): OuterResult<InferValue<This>, NewError> {
+	): OuterResult<InferValue<This>, NewError>;
+	mapError(transform: (error: Err) => unknown): unknown {
 		if (this.success) {
-			return this as unknown as OuterResult<InferValue<This>, NewError>;
+			return this;
 		}
 
-		return ResultFactory.error(transform(this._error)) as OuterResult<
-			InferValue<This>,
-			NewError
-		>;
+		return ResultFactory.error(transform(this._error));
 	}
 
 	/**
@@ -1664,7 +1720,7 @@ export class Result<Value, Err> {
 	recover(
 		this: Result<Value, never>,
 		onFailure: (error: any) => any,
-	): OuterResult<Value, never>;
+	): OuterResult.Ok<Value>;
 	// Generator/AsyncGenerator
 	recover<This extends AnyResult, RT extends Generator | AsyncGenerator>(
 		this: This,
@@ -1737,7 +1793,7 @@ export class Result<Value, Err> {
 		this: Result<Value, never>,
 		onFailure: (error: any) => any,
 		transformError?: (err: unknown) => any,
-	): OuterResult<Value, never>;
+	): OuterResult.Ok<Value>;
 	// Generator/AsyncGenerator
 	recoverCatching<
 		This extends AnyResult,
@@ -2543,7 +2599,7 @@ export class ResultFactory {
 	 */
 	static assertOk<Value>(
 		result: OuterResult<Value, any>,
-	): asserts result is OuterResult<Value, never> {
+	): asserts result is OuterResult.Ok<Value> {
 		if (!result.ok) {
 			throw new Error("Expected a successful result, but got an error instead");
 		}
@@ -2557,7 +2613,7 @@ export class ResultFactory {
 	 */
 	static assertError<Err>(
 		result: OuterResult<any, Err>,
-	): asserts result is OuterResult<never, Err> {
+	): asserts result is OuterResult.Error<Err> {
 		if (result.ok) {
 			throw new Error("Expected a failed result, but got a value instead");
 		}

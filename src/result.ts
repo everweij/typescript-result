@@ -21,10 +21,10 @@ type InferError<T> = T extends AsyncResult<any, infer Error>
 	: T extends Result<any, infer Error>
 		? Error
 		: never;
-type InferValue<T> = T extends AsyncResult<infer Value, any>
-	? Value
-	: T extends Result<infer Value, any>
-		? Value
+type InferValue<T> = T extends AsyncResult<infer V1, any>
+	? V1
+	: T extends Result<infer V2, any>
+		? V2
 		: T;
 
 type AnyResult = Result<any, any>;
@@ -56,12 +56,6 @@ type ExtractErrors<T extends any[]> = {
 		: ExtractError<T[I]>;
 };
 
-type ReturnsAsync<T> = Contains<
-	T,
-	AnyAsyncResult | AnyPromise | AsyncGenerator
->;
-type IfReturnsAsync<T, Yes, No> = ReturnsAsync<T> extends true ? Yes : No;
-
 type ValueOr<Value, Err, Or> = [Err] extends [never]
 	? [Value] extends [never]
 		? Or
@@ -77,6 +71,32 @@ type ErrorOr<Value, Err, Or> = [Value] extends [never]
 type SyncOrAsyncGenerator<Y, R, N> =
 	| Generator<Y, R, N>
 	| AsyncGenerator<Y, R, N>;
+
+type YieldedError<Y> = Y extends { error: infer E } ? E : never;
+type YieldedAsync<Y> = Y extends { async: infer A } ? A : false;
+
+type IsGeneratorAsync2<Y, RAsync> = [YieldedAsync<Y>] extends [false]
+	? [RAsync] extends [never]
+		? false
+		: true
+	: true;
+
+type IfGeneratorAsync2<Y, RAsync, Yes, No> = IsGeneratorAsync2<
+	Y,
+	RAsync
+> extends true
+	? Yes
+	: No;
+
+type GenSync<Y, V, E, RAsync> = Generator<
+	Y,
+	ReturningValue<V> | ReturningError<E> | AsyncResult<RAsync, any>
+>;
+
+type GenAsync<Y, V, E> = AsyncGenerator<
+	Y,
+	ReturningValue<V> | ReturningError<E>
+>;
 
 export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
 	any,
@@ -493,28 +513,57 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * const transformed = result.map(doubleValue); // AsyncResult<number, Error>
 	 * ```
 	 */
-	map<This extends AnyAsyncResult, ReturnType, U = Awaited<ReturnType>>(
+	// Dead-end: value is never (only failure possible), map is ignored
+	map(
+		this: AsyncResult<never, Err>,
+		transform: (value: any) => any,
+	): AsyncResult<never, Err>;
+	// Generator/AsyncGenerator
+	map<This extends AnyAsyncResult, RT extends Generator | AsyncGenerator>(
 		this: This,
-		transform: (value: InferValue<This>) => ReturnType,
-	) {
+		transform: (value: InferValue<This>) => RT,
+	): AsyncResult<
+		InferGeneratorReturn<RT>,
+		InferGeneratorError<RT> | InferError<This>
+	>;
+	// Returns Result<V, E>
+	map<This extends AnyAsyncResult, V, E>(
+		this: This,
+		transform: (value: InferValue<This>) => Result<V, E>,
+	): AsyncResult<V, E | InferError<This>>;
+	// Returns AsyncResult<V, E>
+	map<This extends AnyAsyncResult, V, E>(
+		this: This,
+		transform: (value: InferValue<This>) => AsyncResult<V, E>,
+	): AsyncResult<V, E | InferError<This>>;
+	// Returns union of Result/AsyncResult types
+	map<This extends AnyAsyncResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		transform: (value: InferValue<This>) => RT,
+	): AsyncResult<InferValue<RT>, InferError<This> | InferError<RT>>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	map<This extends AnyAsyncResult, V, E>(
+		this: This,
+		transform: (
+			value: InferValue<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+	): AsyncResult<V, E | InferError<This>>;
+	// Returns Promise<V>
+	map<This extends AnyAsyncResult, V>(
+		this: This,
+		transform: (value: InferValue<This>) => Promise<V>,
+	): AsyncResult<V, InferError<This>>;
+	// Catch-all (plain V) — handles generics and structural overlap
+	map<This extends AnyAsyncResult, V>(
+		this: This,
+		transform: (value: InferValue<This>) => V,
+	): AsyncResult<V, InferError<This>>;
+	map(this: AnyAsyncResult, transform: (value: any) => any) {
 		return new AsyncResult<any, any>((resolve, reject) => {
 			this.then(async (result) => resolve(await result.map(transform))).catch(
 				reject,
 			);
-		}) as [InferValue<This>] extends [never]
-			? AsyncResult<InferValue<This>, InferError<This>>
-			: [ReturnType] extends [Generator | AsyncGenerator]
-				? AsyncResult<
-						InferGeneratorReturn<ReturnType>,
-						InferGeneratorError<ReturnType> | InferError<This>
-					>
-				: [ReturnType] extends [Promise<infer PValue>]
-					? PValue extends U
-						? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-						: never
-					: ReturnType extends U
-						? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-						: never;
+		});
 	}
 
 	/**
@@ -526,15 +575,71 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * @param transformError callback function to transform any potential caught error while transforming the value.
 	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
 	 */
+	// Dead-end: value is never (only failure possible), mapCatching is ignored
+	mapCatching(
+		this: AsyncResult<never, Err>,
+		transformValue: (value: any) => any,
+		transformError?: (error: unknown) => any,
+	): AsyncResult<never, Err>;
+	// Generator/AsyncGenerator
 	mapCatching<
 		This extends AnyAsyncResult,
-		ReturnType,
+		RT extends Generator | AsyncGenerator,
 		ErrorType = NativeError,
-		U = Awaited<ReturnType>,
 	>(
 		this: This,
-		transformValue: (value: InferValue<This>) => ReturnType,
+		transformValue: (value: InferValue<This>) => RT,
 		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<
+		InferGeneratorReturn<RT>,
+		InferGeneratorError<RT> | InferError<This> | ErrorType
+	>;
+	// Returns Result<V, E>
+	mapCatching<This extends AnyAsyncResult, V, E, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => Result<V, E>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns AsyncResult<V, E>
+	mapCatching<This extends AnyAsyncResult, V, E, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => AsyncResult<V, E>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns union of Result/AsyncResult types
+	mapCatching<
+		This extends AnyAsyncResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		transformValue: (value: InferValue<This>) => RT,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<InferValue<RT>, InferError<This> | InferError<RT> | ErrorType>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	mapCatching<This extends AnyAsyncResult, V, E, ErrorType = NativeError>(
+		this: This,
+		transformValue: (
+			value: InferValue<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns Promise<V>
+	mapCatching<This extends AnyAsyncResult, V, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => Promise<V>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V, InferError<This> | ErrorType>;
+	// Catch-all (plain V)
+	mapCatching<This extends AnyAsyncResult, V, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => V,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V, InferError<This> | ErrorType>;
+	mapCatching(
+		this: AnyAsyncResult,
+		transformValue: (value: any) => any,
+		transformError?: (error: unknown) => any,
 	) {
 		return new AsyncResult<any, any>((resolve, reject) => {
 			this.map(transformValue)
@@ -550,26 +655,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 						reject(err);
 					}
 				});
-		}) as [InferValue<This>] extends [never]
-			? AsyncResult<InferValue<This>, InferError<This>>
-			: [ReturnType] extends [Generator | AsyncGenerator]
-				? AsyncResult<
-						InferGeneratorReturn<ReturnType>,
-						InferGeneratorError<ReturnType> | InferError<This> | ErrorType
-					>
-				: [ReturnType] extends [Promise<infer PValue>]
-					? PValue extends U
-						? AsyncResult<
-								ExtractValue<U>,
-								InferError<This> | ExtractError<U> | ErrorType
-							>
-						: never
-					: ReturnType extends U
-						? AsyncResult<
-								ExtractValue<U>,
-								InferError<This> | ExtractError<U> | ErrorType
-							>
-						: never;
+		});
 	}
 
 	/**
@@ -635,10 +721,52 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * persistInDB(item).recover(() => persistLocally(item)); // AsyncResult<Item, IOError>
 	 * ```
 	 */
-	recover<This extends AnyAsyncResult, ReturnType, U = Awaited<ReturnType>>(
+	// Dead-end: error is never (only success possible), recover is ignored
+	recover(
+		this: AsyncResult<Value, never>,
+		onFailure: (error: any) => any,
+	): AsyncResult<Value, never>;
+	// Generator/AsyncGenerator
+	recover<This extends AnyAsyncResult, RT extends Generator | AsyncGenerator>(
 		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
-	) {
+		onFailure: (error: InferError<This>) => RT,
+	): AsyncResult<
+		InferGeneratorReturn<RT> | InferValue<This>,
+		InferGeneratorError<RT>
+	>;
+	// Returns Result<V, E>
+	recover<This extends AnyAsyncResult, V, E>(
+		this: This,
+		onFailure: (error: InferError<This>) => Result<V, E>,
+	): AsyncResult<V | InferValue<This>, E>;
+	// Returns AsyncResult<V, E>
+	recover<This extends AnyAsyncResult, V, E>(
+		this: This,
+		onFailure: (error: InferError<This>) => AsyncResult<V, E>,
+	): AsyncResult<V | InferValue<This>, E>;
+	// Returns union of Result/AsyncResult types
+	recover<This extends AnyAsyncResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		onFailure: (error: InferError<This>) => RT,
+	): AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT>>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	recover<This extends AnyAsyncResult, V, E>(
+		this: This,
+		onFailure: (
+			error: InferError<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+	): AsyncResult<V | InferValue<This>, E>;
+	// Returns Promise<V>
+	recover<This extends AnyAsyncResult, V>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<V>,
+	): AsyncResult<V | InferValue<This>, never>;
+	// Catch-all (plain V)
+	recover<This extends AnyAsyncResult, V>(
+		this: This,
+		onFailure: (error: InferError<This>) => V,
+	): AsyncResult<V | InferValue<This>, never>;
+	recover(this: AnyAsyncResult, onFailure: (error: any) => any) {
 		return new AsyncResult((resolve, reject) =>
 			this.then(async (result) => {
 				try {
@@ -648,20 +776,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 					reject(error);
 				}
 			}).catch(reject),
-		) as [InferError<This>] extends [never]
-			? AsyncResult<InferValue<This>, InferError<This>>
-			: [ReturnType] extends [Generator | AsyncGenerator]
-				? AsyncResult<
-						InferGeneratorReturn<ReturnType> | InferValue<This>,
-						InferGeneratorError<ReturnType>
-					>
-				: [ReturnType] extends [Promise<infer PValue>]
-					? PValue extends U
-						? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-						: never
-					: ReturnType extends U
-						? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-						: never;
+		);
 	}
 
 	/**
@@ -674,40 +789,77 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
 	 * if it represents a success.
 	 */
+	// Dead-end: error is never (only success possible), recoverCatching is ignored
+	recoverCatching(
+		this: AsyncResult<Value, never>,
+		onFailure: (error: any) => any,
+		transformError?: (error: unknown) => any,
+	): AsyncResult<Value, never>;
+	// Generator/AsyncGenerator
 	recoverCatching<
 		This extends AnyAsyncResult,
-		ReturnType,
+		RT extends Generator | AsyncGenerator,
 		ErrorType = NativeError,
-		U = Awaited<ReturnType>,
 	>(
 		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
+		onFailure: (error: InferError<This>) => RT,
 		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<
+		InferGeneratorReturn<RT> | InferValue<This>,
+		InferGeneratorError<RT> | ErrorType
+	>;
+	// Returns Result<V, E>
+	recoverCatching<This extends AnyAsyncResult, V, E, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => Result<V, E>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns AsyncResult<V, E>
+	recoverCatching<This extends AnyAsyncResult, V, E, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => AsyncResult<V, E>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns union of Result/AsyncResult types
+	recoverCatching<
+		This extends AnyAsyncResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		onFailure: (error: InferError<This>) => RT,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT> | ErrorType>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	recoverCatching<This extends AnyAsyncResult, V, E, ErrorType = NativeError>(
+		this: This,
+		onFailure: (
+			error: InferError<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns Promise<V>
+	recoverCatching<This extends AnyAsyncResult, V, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<V>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, ErrorType>;
+	// Catch-all (plain V)
+	recoverCatching<This extends AnyAsyncResult, V, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => V,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, ErrorType>;
+	recoverCatching(
+		this: AnyAsyncResult,
+		onFailure: (error: any) => any,
+		transformError?: (error: unknown) => any,
 	) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
 				resolve(result.recoverCatching(onFailure, transformError) as any);
 			}).catch(reject),
-		) as [InferError<This>] extends [never]
-			? AsyncResult<InferValue<This>, InferError<This>>
-			: [ReturnType] extends [Generator | AsyncGenerator]
-				? AsyncResult<
-						InferGeneratorReturn<ReturnType> | InferValue<This>,
-						InferGeneratorError<ReturnType> | ErrorType
-					>
-				: [ReturnType] extends [Promise<infer PValue>]
-					? PValue extends U
-						? AsyncResult<
-								InferValue<This> | ExtractValue<U>,
-								ExtractError<U> | ErrorType
-							>
-						: never
-					: ReturnType extends U
-						? AsyncResult<
-								InferValue<This> | ExtractValue<U>,
-								ExtractError<U> | ErrorType
-							>
-						: never;
+		);
 	}
 
 	/**
@@ -1294,55 +1446,66 @@ export class Result<Value, Err> {
 	 * const transformed = result.map(doubleValue); // Result<number, Error>
 	 * ```
 	 */
-	map<This extends AnyResult, ReturnType, U = Awaited<ReturnType>>(
+	// Dead-end: value is never (only failure possible), map is ignored
+	map(
+		this: Result<never, Err>,
+		transform: (value: any) => any,
+	): OuterResult<never, Err>;
+	// Generator/AsyncGenerator
+	map<This extends AnyResult, RT extends Generator | AsyncGenerator>(
 		this: This,
-		transform: (value: InferValue<This>) => ReturnType,
-	) {
-		return (
-			this.success
-				? ResultFactory.run(() => transform(this._value))
-				: isAsyncFn(transform)
-					? AsyncResult.error(this._error)
-					: this
-		) as
-			// If the result comes to an dead end (only a failure is possible),
-			// we return the original result type directly.
-			[InferValue<This>] extends [never]
-				? OuterResult<InferValue<This>, InferError<This>>
-				: // In case of a generator function callback...
-					[ReturnType] extends [Generator | AsyncGenerator]
-					? IfGeneratorAsync<
-							ReturnType,
-							AsyncResult<
-								InferGeneratorReturn<ReturnType>,
-								InferGeneratorError<ReturnType> | InferError<This>
-							>,
-							OuterResult<
-								InferGeneratorReturn<ReturnType>,
-								InferGeneratorError<ReturnType> | InferError<This>
-							>
-						>
-					: //  In case of an async function callback...
-						[ReturnType] extends [Promise<infer PValue>]
-						? PValue extends U
-							? AsyncResult<ExtractValue<U>, InferError<This> | ExtractError<U>>
-							: never
-						: // In case of a regular function callback...
-							IfReturnsAsync<
-								ReturnType,
-								ReturnType extends U
-									? AsyncResult<
-											ExtractValue<U>,
-											InferError<This> | ExtractError<U>
-										>
-									: never,
-								ReturnType extends U
-									? OuterResult<
-											ExtractValue<U>,
-											InferError<This> | ExtractError<U>
-										>
-									: never
-							>;
+		transform: (value: InferValue<This>) => RT,
+	): IfGeneratorAsync<
+		RT,
+		AsyncResult<
+			InferGeneratorReturn<RT>,
+			InferGeneratorError<RT> | InferError<This>
+		>,
+		OuterResult<
+			InferGeneratorReturn<RT>,
+			InferGeneratorError<RT> | InferError<This>
+		>
+	>;
+	// Returns Result<V, E>
+	map<This extends AnyResult, V, E>(
+		this: This,
+		transform: (value: InferValue<This>) => Result<V, E>,
+	): OuterResult<V, E | InferError<This>>;
+	// Returns AsyncResult<V, E>
+	map<This extends AnyResult, V, E>(
+		this: This,
+		transform: (value: InferValue<This>) => AsyncResult<V, E>,
+	): AsyncResult<V, E | InferError<This>>;
+	// Returns union of Result/AsyncResult types
+	map<This extends AnyResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		transform: (value: InferValue<This>) => RT,
+	): Contains<RT, AnyAsyncResult> extends true
+		? AsyncResult<InferValue<RT>, InferError<This> | InferError<RT>>
+		: OuterResult<InferValue<RT>, InferError<This> | InferError<RT>>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	map<This extends AnyResult, V, E>(
+		this: This,
+		transform: (
+			value: InferValue<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+	): AsyncResult<V, E | InferError<This>>;
+	// Returns Promise<V>
+	map<This extends AnyResult, V>(
+		this: This,
+		transform: (value: InferValue<This>) => Promise<V>,
+	): AsyncResult<V, InferError<This>>;
+	// Catch-all (plain V) — handles generics and structural overlap
+	map<This extends AnyResult, V>(
+		this: This,
+		transform: (value: InferValue<This>) => V,
+	): OuterResult<V, InferError<This>>;
+	map(this: AnyResult, transform: (value: any) => any) {
+		return this.success
+			? ResultFactory.run(() => transform(this._value))
+			: isAsyncFn(transform)
+				? AsyncResult.error(this._error)
+				: this;
 	}
 
 	/**
@@ -1355,63 +1518,90 @@ export class Result<Value, Err> {
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
 	 * if the transform function is async.
 	 */
+	// Dead-end: value is never (only failure possible), mapCatching is ignored
+	mapCatching(
+		this: Result<never, Err>,
+		transformValue: (value: any) => any,
+		transformError?: (err: unknown) => any,
+	): OuterResult<never, Err>;
+	// Generator/AsyncGenerator
 	mapCatching<
 		This extends AnyResult,
-		ReturnType,
+		RT extends Generator | AsyncGenerator,
 		ErrorType = NativeError,
-		U = Awaited<ReturnType>,
 	>(
 		this: This,
-		transformValue: (value: InferValue<This>) => ReturnType,
+		transformValue: (value: InferValue<This>) => RT,
 		transformError?: (err: unknown) => ErrorType,
-	) {
-		return (this.success
+	): IfGeneratorAsync<
+		RT,
+		AsyncResult<
+			InferGeneratorReturn<RT>,
+			InferGeneratorError<RT> | InferError<This> | ErrorType
+		>,
+		OuterResult<
+			InferGeneratorReturn<RT>,
+			InferGeneratorError<RT> | InferError<This> | ErrorType
+		>
+	>;
+	// Returns Result<V, E>
+	mapCatching<This extends AnyResult, V, E, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => Result<V, E>,
+		transformError?: (err: unknown) => ErrorType,
+	): OuterResult<V, E | InferError<This> | ErrorType>;
+	// Returns AsyncResult<V, E>
+	mapCatching<This extends AnyResult, V, E, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => AsyncResult<V, E>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns union of Result/AsyncResult types
+	mapCatching<
+		This extends AnyResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		transformValue: (value: InferValue<This>) => RT,
+		transformError?: (err: unknown) => ErrorType,
+	): Contains<RT, AnyAsyncResult> extends true
+		? AsyncResult<InferValue<RT>, InferError<This> | InferError<RT> | ErrorType>
+		: OuterResult<
+				InferValue<RT>,
+				InferError<This> | InferError<RT> | ErrorType
+			>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	mapCatching<This extends AnyResult, V, E, ErrorType = NativeError>(
+		this: This,
+		transformValue: (
+			value: InferValue<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns Promise<V>
+	mapCatching<This extends AnyResult, V, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => Promise<V>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<V, InferError<This> | ErrorType>;
+	// Catch-all (plain V)
+	mapCatching<This extends AnyResult, V, ErrorType = NativeError>(
+		this: This,
+		transformValue: (value: InferValue<This>) => V,
+		transformError?: (err: unknown) => ErrorType,
+	): OuterResult<V, InferError<This> | ErrorType>;
+	mapCatching(
+		this: AnyResult,
+		transformValue: (value: any) => any,
+		transformError?: (err: unknown) => any,
+	): any {
+		return this.success
 			? ResultFactory.try(
 					() => transformValue(this._value),
 					transformError as AnyFunction,
 				)
-			: this) as unknown as
-			// If the result comes to an dead end (only a failure is possible),
-			// we return the original result type directly.
-			[InferValue<This>] extends [never]
-				? OuterResult<InferValue<This>, InferError<This>>
-				: // In case of a generator function callback...
-					[ReturnType] extends [Generator | AsyncGenerator]
-					? IfGeneratorAsync<
-							ReturnType,
-							AsyncResult<
-								InferGeneratorReturn<ReturnType>,
-								InferGeneratorError<ReturnType> | InferError<This> | ErrorType
-							>,
-							OuterResult<
-								InferGeneratorReturn<ReturnType>,
-								InferGeneratorError<ReturnType> | InferError<This> | ErrorType
-							>
-						>
-					: // In case of an async function callback...
-						[ReturnType] extends [Promise<infer PValue>]
-						? PValue extends U
-							? AsyncResult<
-									ExtractValue<U>,
-									InferError<This> | ExtractError<U> | ErrorType
-								>
-							: never
-						: // In case of a regular function callback...
-							IfReturnsAsync<
-								ReturnType,
-								ReturnType extends U
-									? AsyncResult<
-											ExtractValue<U>,
-											InferError<This> | ExtractError<U> | ErrorType
-										>
-									: never,
-								ReturnType extends U
-									? OuterResult<
-											ExtractValue<U>,
-											InferError<This> | ExtractError<U> | ErrorType
-										>
-									: never
-							>;
+			: this;
 	}
 
 	/**
@@ -1470,55 +1660,66 @@ export class Result<Value, Err> {
 	 * persistInDB(item).recover(() => persistLocally(item)); // Result<Item, IOError>
 	 * ```
 	 */
-	recover<This extends AnyResult, ReturnType, U = Awaited<ReturnType>>(
+	// Dead-end: error is never (only success possible), recover is ignored
+	recover(
+		this: Result<Value, never>,
+		onFailure: (error: any) => any,
+	): OuterResult<Value, never>;
+	// Generator/AsyncGenerator
+	recover<This extends AnyResult, RT extends Generator | AsyncGenerator>(
 		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
-	) {
-		return (
-			this.success
-				? isAsyncFn(onFailure)
-					? AsyncResult.ok(this._value)
-					: this
-				: ResultFactory.run(() => onFailure(this._error))
-		) as
-			// If the only a success is possible, there's nothing to recover from,
-			// so we return the original result type directly.
-			[InferError<This>] extends [never]
-				? OuterResult<InferValue<This>, InferError<This>>
-				: // In case of a generator function callback...
-					[ReturnType] extends [Generator | AsyncGenerator]
-					? IfGeneratorAsync<
-							ReturnType,
-							AsyncResult<
-								InferGeneratorReturn<ReturnType> | InferValue<This>,
-								InferGeneratorError<ReturnType>
-							>,
-							OuterResult<
-								InferGeneratorReturn<ReturnType> | InferValue<This>,
-								InferGeneratorError<ReturnType>
-							>
-						>
-					: // In case of an async function callback...
-						[ReturnType] extends [Promise<infer PValue>]
-						? PValue extends U
-							? AsyncResult<InferValue<This> | ExtractValue<U>, ExtractError<U>>
-							: never
-						: // In case of a regular function callback...
-							IfReturnsAsync<
-								ReturnType,
-								ReturnType extends U
-									? AsyncResult<
-											InferValue<This> | ExtractValue<U>,
-											ExtractError<U>
-										>
-									: never,
-								ReturnType extends U
-									? OuterResult<
-											InferValue<This> | ExtractValue<U>,
-											ExtractError<U>
-										>
-									: never
-							>;
+		onFailure: (error: InferError<This>) => RT,
+	): IfGeneratorAsync<
+		RT,
+		AsyncResult<
+			InferGeneratorReturn<RT> | InferValue<This>,
+			InferGeneratorError<RT>
+		>,
+		OuterResult<
+			InferGeneratorReturn<RT> | InferValue<This>,
+			InferGeneratorError<RT>
+		>
+	>;
+	// Returns Result<V, E>
+	recover<This extends AnyResult, V, E>(
+		this: This,
+		onFailure: (error: InferError<This>) => Result<V, E>,
+	): OuterResult<V | InferValue<This>, E>;
+	// Returns AsyncResult<V, E>
+	recover<This extends AnyResult, V, E>(
+		this: This,
+		onFailure: (error: InferError<This>) => AsyncResult<V, E>,
+	): AsyncResult<V | InferValue<This>, E>;
+	// Returns union of Result/AsyncResult types
+	recover<This extends AnyResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		onFailure: (error: InferError<This>) => RT,
+	): Contains<RT, AnyAsyncResult> extends true
+		? AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT>>
+		: OuterResult<InferValue<RT> | InferValue<This>, InferError<RT>>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	recover<This extends AnyResult, V, E>(
+		this: This,
+		onFailure: (
+			error: InferError<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+	): AsyncResult<V | InferValue<This>, E>;
+	// Returns Promise<V>
+	recover<This extends AnyResult, V>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<V>,
+	): AsyncResult<V | InferValue<This>, never>;
+	// Catch-all (plain V)
+	recover<This extends AnyResult, V>(
+		this: This,
+		onFailure: (error: InferError<This>) => V,
+	): OuterResult<V | InferValue<This>, never>;
+	recover(this: AnyResult, onFailure: (error: any) => any) {
+		return this.success
+			? isAsyncFn(onFailure)
+				? AsyncResult.ok(this._value)
+				: this
+			: ResultFactory.run(() => onFailure(this._error));
 	}
 
 	/**
@@ -1531,67 +1732,92 @@ export class Result<Value, Err> {
 	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
 	 * when the result represents a failure, or the original instance if it represents a success.
 	 */
+	// Dead-end: error is never (only success possible), recoverCatching is ignored
+	recoverCatching(
+		this: Result<Value, never>,
+		onFailure: (error: any) => any,
+		transformError?: (err: unknown) => any,
+	): OuterResult<Value, never>;
+	// Generator/AsyncGenerator
 	recoverCatching<
 		This extends AnyResult,
-		ReturnType,
+		RT extends Generator | AsyncGenerator,
 		ErrorType = NativeError,
-		U = Awaited<ReturnType>,
 	>(
 		this: This,
-		onFailure: (error: InferError<This>) => ReturnType,
+		onFailure: (error: InferError<This>) => RT,
 		transformError?: (err: unknown) => ErrorType,
-	) {
-		return (
-			this.success
-				? isAsyncFn(onFailure)
-					? AsyncResult.ok(this._value)
-					: this
-				: ResultFactory.try(
-						() => onFailure(this._error),
-						transformError as AnyFunction,
-					)
-		) as
-			// If the only a success is possible, there's nothing to recover from,
-			// so we return the original result type directly.
-			[InferError<This>] extends [never]
-				? OuterResult<InferValue<This>, InferError<This>>
-				: // In case of a generator function callback...
-					[ReturnType] extends [Generator | AsyncGenerator]
-					? IfGeneratorAsync<
-							ReturnType,
-							AsyncResult<
-								InferGeneratorReturn<ReturnType> | InferValue<This>,
-								InferGeneratorError<ReturnType> | ErrorType
-							>,
-							OuterResult<
-								InferGeneratorReturn<ReturnType> | InferValue<This>,
-								InferGeneratorError<ReturnType> | ErrorType
-							>
-						>
-					: // In case of an async function callback...
-						[ReturnType] extends [Promise<infer PValue>]
-						? PValue extends U
-							? AsyncResult<
-									InferValue<This> | ExtractValue<U>,
-									ExtractError<U> | ErrorType
-								>
-							: never
-						: // In case of a regular function callback...
-							IfReturnsAsync<
-								ReturnType,
-								ReturnType extends U
-									? AsyncResult<
-											InferValue<This> | ExtractValue<U>,
-											ExtractError<U> | ErrorType
-										>
-									: never,
-								ReturnType extends U
-									? OuterResult<
-											InferValue<This> | ExtractValue<U>,
-											ExtractError<U> | ErrorType
-										>
-									: never
-							>;
+	): IfGeneratorAsync<
+		RT,
+		AsyncResult<
+			InferGeneratorReturn<RT> | InferValue<This>,
+			InferGeneratorError<RT> | ErrorType
+		>,
+		OuterResult<
+			InferGeneratorReturn<RT> | InferValue<This>,
+			InferGeneratorError<RT> | ErrorType
+		>
+	>;
+	// Returns Result<V, E>
+	recoverCatching<This extends AnyResult, V, E, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => Result<V, E>,
+		transformError?: (err: unknown) => ErrorType,
+	): OuterResult<V | InferValue<This>, E | ErrorType>;
+	// Returns AsyncResult<V, E>
+	recoverCatching<This extends AnyResult, V, E, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => AsyncResult<V, E>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns union of Result/AsyncResult types
+	recoverCatching<
+		This extends AnyResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		onFailure: (error: InferError<This>) => RT,
+		transformError?: (err: unknown) => ErrorType,
+	): Contains<RT, AnyAsyncResult> extends true
+		? AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT> | ErrorType>
+		: OuterResult<
+				InferValue<RT> | InferValue<This>,
+				InferError<RT> | ErrorType
+			>;
+	// Returns Promise<Result<V, E> | AsyncResult<V, E>>
+	recoverCatching<This extends AnyResult, V, E, ErrorType = NativeError>(
+		this: This,
+		onFailure: (
+			error: InferError<This>,
+		) => Promise<Result<V, E> | AsyncResult<V, E>>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns Promise<V>
+	recoverCatching<This extends AnyResult, V, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<V>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<V | InferValue<This>, ErrorType>;
+	// Catch-all (plain V)
+	recoverCatching<This extends AnyResult, V, ErrorType = NativeError>(
+		this: This,
+		onFailure: (error: InferError<This>) => V,
+		transformError?: (err: unknown) => ErrorType,
+	): OuterResult<V | InferValue<This>, ErrorType>;
+	recoverCatching(
+		this: AnyResult,
+		onFailure: (error: any) => any,
+		transformError?: (err: unknown) => any,
+	): any {
+		return this.success
+			? isAsyncFn(onFailure)
+				? AsyncResult.ok(this._value)
+				: this
+			: ResultFactory.try(
+					() => onFailure(this._error),
+					transformError as AnyFunction,
+				);
 	}
 
 	/**
@@ -2168,28 +2394,53 @@ export class ResultFactory {
 	 * }
 	 * ```
 	 */
-	static gen<T extends Generator | AsyncGenerator>(
-		fn: () => T,
-	): IfGeneratorAsync<
-		T,
-		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T>>
+	// Sync generator function with possible async yields/returns
+	static gen<Y, V, E = never, RAsync = never>(
+		fn: () => GenSync<Y, V, E, RAsync>,
+	): IfGeneratorAsync2<
+		Y,
+		RAsync,
+		AsyncResult<V, YieldedError<Y> | E>,
+		OuterResult<V, YieldedError<Y> | E>
 	>;
-	static gen<T extends Generator | AsyncGenerator, This>(
+
+	// Async generator function
+	static gen<Y, V, E = never>(
+		fn: () => GenAsync<Y, V, E>,
+	): AsyncResult<V, YieldedError<Y> | E>;
+
+	// Sync generator function with this context and possible async yields/returns
+	static gen<This, Y, V, E = never, RAsync = never>(
 		self: This,
-		fn: (this: This) => T,
-	): IfGeneratorAsync<
-		T,
-		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T>>
+		fn: (this: This) => GenSync<Y, V, E, RAsync>,
+	): IfGeneratorAsync2<
+		Y,
+		RAsync,
+		AsyncResult<V, YieldedError<Y> | E>,
+		OuterResult<V, YieldedError<Y> | E>
 	>;
-	static gen<T extends Generator | AsyncGenerator>(
-		generator: T,
-	): IfGeneratorAsync<
-		T,
-		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T>>,
-		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T>>
+
+	// Async generator function with this context
+	static gen<This, Y, V, E = never>(
+		self: This,
+		fn: (this: This) => GenAsync<Y, V, E>,
+	): AsyncResult<V, YieldedError<Y> | E>;
+
+	// Direct sync generator
+	static gen<Y, V, E = never, RAsync = never>(
+		generator: GenSync<Y, V, E, RAsync>,
+	): IfGeneratorAsync2<
+		Y,
+		RAsync,
+		AsyncResult<V, YieldedError<Y> | E>,
+		OuterResult<V, YieldedError<Y> | E>
 	>;
+
+	// Direct async generator
+	static gen<Y, V, E = never>(
+		generator: GenAsync<Y, V, E>,
+	): AsyncResult<V, YieldedError<Y> | E>;
+
 	static gen<T extends Generator | AsyncGenerator>(
 		generatorOrSelfOrFn: unknown,
 		fn?: () => T,

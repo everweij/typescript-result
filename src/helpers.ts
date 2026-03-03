@@ -86,7 +86,7 @@ export type AnyValue = {};
 
 export type Contains<T, V, U = T> = (
 	T extends U
-		? U extends V
+		? T extends V
 			? true
 			: false
 		: false

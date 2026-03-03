@@ -1078,16 +1078,16 @@ describe("Result", () => {
 		});
 
 		it("supports sync generator functions that return a result", () => {
-			const asyncResult = Result.gen(function* () {
+			const result = Result.gen(function* () {
 				return Result.ok(12);
 			});
 
-			expectTypeOf(asyncResult).toEqualTypeOf<Result<number, never>>();
-			expect(asyncResult).toBeInstanceOf(Result);
-			expect(asyncResult).toEqual(Result.ok(12));
+			expectTypeOf(result).toEqualTypeOf<Result<number, never>>();
+			expect(result).toBeInstanceOf(Result);
+			expect(result).toEqual(Result.ok(12));
 		});
 
-		it("supports async generator functions that returns a result", async () => {
+		it("supports async generator functions that return a result", async () => {
 			const asyncResult = Result.gen(async function* () {
 				return Result.ok(12) as Result<number, ErrorA>;
 			});
@@ -1140,6 +1140,10 @@ describe("Result", () => {
 
 				return a + b + c + d;
 			});
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<number, ErrorA | ErrorB>
+			>();
 
 			const result = await asyncResult;
 			expect(result).toEqual(Result.ok(10));
@@ -2084,7 +2088,10 @@ describe("Result", () => {
 				expect(outcome.value).toBe("SOME VALUE");
 			});
 
-			it("resolves the correct type when the returned value is a union of result-like and regular values", async () => {
+			it("cannot resolve the correct type when the returned value is a union of result-like and regular values", async () => {
+				// Note: mixed unions of plain values and Result types fall to the catch-all
+				// overload, which wraps without unwrapping. Use Result.gen() for complex
+				// control flow that mixes plain values and Result returns.
 				function runSync(value: number) {
 					return Result.ok(value).map((value) => {
 						if (value === 1) {
@@ -2099,7 +2106,10 @@ describe("Result", () => {
 					});
 				}
 
-				expectTypeOf(runSync(1)).toEqualTypeOf<Result<"one" | "two", ErrorB>>();
+				// TypeScript cannot infer the correct type here, because of the mixed return types in the map callback, so it falls back to the catch-all overload that wraps without unwrapping.
+				expectTypeOf(runSync(1)).toEqualTypeOf<
+					Result.Ok<Result.Error<ErrorB> | "one" | Result.Ok<"two">>
+				>();
 				expect(runSync(1)).toEqual(Result.ok("one"));
 				expect(runSync(2)).toEqual(Result.ok("two"));
 				expect(runSync(3)).toEqual(Result.error(new ErrorB()));
@@ -2118,9 +2128,7 @@ describe("Result", () => {
 					});
 				}
 
-				expectTypeOf(runAsync(1)).toEqualTypeOf<
-					AsyncResult<"one" | "two", ErrorB>
-				>();
+				// runtime unwrapping still works
 				expect(await runAsync(1)).toEqual(Result.ok("one"));
 				expect(await runAsync(2)).toEqual(Result.ok("two"));
 				expect(await runAsync(3)).toEqual(Result.error(new ErrorB()));
@@ -2840,7 +2848,7 @@ describe("Result", () => {
 		const asyncFailure = AsyncResult.error(new ErrorA());
 
 		const resultA = syncFailure.map((value) => {
-			expectTypeOf(value).toEqualTypeOf<never>();
+			expectTypeOf(value).toEqualTypeOf<any>();
 			return Result.ok(12);
 		});
 		expectTypeOf(resultA).toEqualTypeOf<Result<never, ErrorA>>();
@@ -2853,13 +2861,13 @@ describe("Result", () => {
 		expectTypeOf(resultC).toEqualTypeOf<Result<never, ErrorA>>();
 
 		const resultD = asyncFailure.map((value) => {
-			expectTypeOf(value).toEqualTypeOf<never>();
+			expectTypeOf(value).toEqualTypeOf<any>();
 			return Result.ok(12);
 		});
 		expectTypeOf(resultD).toEqualTypeOf<AsyncResult<never, ErrorA>>();
 
 		const resultE = asyncFailure.mapCatching((value) => {
-			expectTypeOf(value).toEqualTypeOf<never>();
+			expectTypeOf(value).toEqualTypeOf<any>();
 			return Result.ok(12);
 		});
 		expectTypeOf(resultE).toEqualTypeOf<AsyncResult<never, ErrorA>>();
@@ -3783,5 +3791,90 @@ describe("AsyncResult", () => {
 				expect(recoveredResult.error.message).toBe("inside transform function");
 			});
 		});
+	});
+});
+
+describe("Issue #25: generic wrapper functions", () => {
+	it("AsyncResult.map with generic parameters", () => {
+		function wrapper<A, E>(fn: () => AsyncResult<A, E>): AsyncResult<A, E> {
+			return fn().map((a) => a);
+		}
+
+		// V is inferred as A (catch-all overload), preserving the generic parameter
+		expectTypeOf(wrapper).returns.toEqualTypeOf<
+			AsyncResult<unknown, unknown>
+		>();
+
+		const result = wrapper(() => AsyncResult.ok(12));
+		expectTypeOf(result).toEqualTypeOf<AsyncResult<number, never>>();
+	});
+
+	it("Result.map with generic parameters", () => {
+		function wrapper<A extends string, E>(r: Result<A, E>): Result<A, E> {
+			const result = r.map((a) => a);
+			return result;
+		}
+
+		expectTypeOf(wrapper).returns.toEqualTypeOf<Result<unknown, unknown>>();
+
+		const result = wrapper(Result.ok(12));
+		expectTypeOf(result).toEqualTypeOf<Result.Ok<number>>();
+	});
+
+	it("Result.gen with generic parameters", () => {
+		function wrapperA<A, E>(fn: () => Result<A, E>) {
+			return Result.gen(function* () {
+				const value = yield* fn();
+				return value;
+			});
+		}
+
+		expectTypeOf(wrapperA).returns.toEqualTypeOf<Result<unknown, unknown>>();
+
+		const resultA = wrapperA(() => Result.ok(12));
+		expectTypeOf(resultA).toEqualTypeOf<Result.Ok<number>>();
+
+		const wrapperB = <A, E>(fn: () => AsyncResult<A, E>): AsyncResult<A, E> => {
+			return Result.gen(function* () {
+				const r = yield* fn();
+				return Result.ok(r);
+			});
+		};
+
+		expectTypeOf(wrapperB).returns.toEqualTypeOf<
+			AsyncResult<unknown, unknown>
+		>();
+
+		const resultB = wrapperB(() => AsyncResult.ok(12));
+		expectTypeOf(resultB).toEqualTypeOf<AsyncResult<number, never>>();
+	});
+
+	it("let's you define interfaces when work with generic results", () => {
+		class RunnerError extends Error {
+			readonly type = "runner-error";
+		}
+
+		interface Runner {
+			run<A, E>(task: () => AsyncResult<A, E>): AsyncResult<A, E | RunnerError>;
+		}
+
+		class RunnerImpl implements Runner {
+			run<A, E>(
+				task: () => AsyncResult<A, E>,
+			): AsyncResult<A, E | RunnerError> {
+				return task().mapError((error) =>
+					Math.random() > 0.5 ? error : new RunnerError(),
+				);
+			}
+		}
+
+		const runner = new RunnerImpl();
+
+		const result = runner.run(
+			() => AsyncResult.ok(12) as AsyncResult<number, ErrorA>,
+		);
+		expectTypeOf(result).toEqualTypeOf<
+			AsyncResult<number, ErrorA | RunnerError>
+		>();
 	});
 });

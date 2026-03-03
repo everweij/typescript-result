@@ -16,16 +16,18 @@ import {
 import type { Result as OuterResult } from "./index.js";
 import { Matcher } from "./matcher.js";
 
-type InferError<T> = T extends AsyncResult<any, infer Error>
-	? Error
-	: T extends Result<any, infer Error>
+type InferError<T> =
+	T extends AsyncResult<any, infer Error>
 		? Error
-		: never;
-type InferValue<T> = T extends AsyncResult<infer V1, any>
-	? V1
-	: T extends Result<infer V2, any>
-		? V2
-		: T;
+		: T extends Result<any, infer Error>
+			? Error
+			: never;
+type InferValue<T> =
+	T extends AsyncResult<infer V1, any>
+		? V1
+		: T extends Result<infer V2, any>
+			? V2
+			: T;
 
 type AnyResult = Result<any, any>;
 type AnyOuterResult = OuterResult<any, any>;
@@ -81,12 +83,8 @@ type IsGeneratorAsync2<Y, RAsync> = [YieldedAsync<Y>] extends [false]
 		: true
 	: true;
 
-type IfGeneratorAsync2<Y, RAsync, Yes, No> = IsGeneratorAsync2<
-	Y,
-	RAsync
-> extends true
-	? Yes
-	: No;
+type IfGeneratorAsync2<Y, RAsync, Yes, No> =
+	IsGeneratorAsync2<Y, RAsync> extends true ? Yes : No;
 
 type GenSync<Y, V, E, RAsync> = Generator<
 	Y,
@@ -98,13 +96,8 @@ type GenAsync<Y, V, E> = AsyncGenerator<
 	ReturningValue<V> | ReturningError<E>
 >;
 
-export type InferGeneratorReturn<T> = T extends SyncOrAsyncGenerator<
-	any,
-	infer R,
-	any
->
-	? ExtractValue<R>
-	: never;
+export type InferGeneratorReturn<T> =
+	T extends SyncOrAsyncGenerator<any, infer R, any> ? ExtractValue<R> : never;
 
 export type InferGeneratorError<T> = [T] extends [
 	SyncOrAsyncGenerator<never, infer R, any>,
@@ -114,35 +107,32 @@ export type InferGeneratorError<T> = [T] extends [
 		? E | InferError<R>
 		: never;
 
-type IsGeneratorAsync<T> = T extends SyncOrAsyncGenerator<
-	infer Info,
-	infer R,
-	any
->
-	? Contains<Info, { async: true }> extends true
-		? true
-		: Contains<T, AsyncGenerator<any, any, any>> extends true
+type IsGeneratorAsync<T> =
+	T extends SyncOrAsyncGenerator<infer Info, infer R, any>
+		? Contains<Info, { async: true }> extends true
 			? true
-			: Contains<R, AnyAsyncResult> extends true
+			: Contains<T, AsyncGenerator<any, any, any>> extends true
 				? true
-				: false
-	: false;
+				: Contains<R, AnyAsyncResult> extends true
+					? true
+					: false
+		: false;
 
-export type IfGeneratorAsync<T, Yes, No> = IsGeneratorAsync<T> extends true
-	? Yes
-	: No;
+export type IfGeneratorAsync<T, Yes, No> =
+	IsGeneratorAsync<T> extends true ? Yes : No;
 
 type UnwrapList<T extends any[]> = {
 	[I in keyof T]: T[I] extends AnyFunction<infer U> ? U : T[I];
 };
 
-type IsAsync<T> = IsGeneratorAsync<T> extends true
-	? true
-	: T extends AnyPromise
+type IsAsync<T> =
+	IsGeneratorAsync<T> extends true
 		? true
-		: T extends AnyFunction<infer U>
-			? IsAsync<U>
-			: never;
+		: T extends AnyPromise
+			? true
+			: T extends AnyFunction<infer U>
+				? IsAsync<U>
+				: never;
 
 type ListContainsAsync<T extends any[]> = {
 	[I in keyof T]: IsAsync<T[I]>;

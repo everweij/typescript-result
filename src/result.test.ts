@@ -599,6 +599,29 @@ describe("Result", () => {
 			expect(functionThatReturnsString).not.toHaveBeenCalled();
 		});
 
+		it("fails eagerly when a function returns an error while async items are present", async () => {
+			const functionThatReturnsString: () => string = vi
+				.fn()
+				.mockReturnValue("some value");
+
+			const asyncAllResult = Result.allCatching(
+				Promise.resolve("a"),
+				() => Result.error(new CustomError()) as Result<number, CustomError>,
+				functionThatReturnsString,
+			);
+
+			expectTypeOf(asyncAllResult).toEqualTypeOf<
+				AsyncResult<[string, number, string], Error | CustomError>
+			>();
+
+			expect(asyncAllResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncAllResult;
+
+			Result.assertError(result);
+			expect(result.error).toBeInstanceOf(CustomError);
+			expect(functionThatReturnsString).not.toHaveBeenCalled();
+		});
+
 		it("catches async failures correctly", async () => {
 			const asyncAllResult = Result.allCatching(
 				"a",

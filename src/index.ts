@@ -15,16 +15,18 @@ export { AsyncResult } from "./result.js";
 export namespace Result {
 	export type Ok<Value> = ResultBase<Value, never>;
 	export type Error<E> = ResultBase<never, E>;
-	export type InferError<T> = T extends AsyncResult<any, infer Error>
-		? Error
-		: T extends Result<any, infer Error>
+	export type InferError<T> =
+		T extends AsyncResult<any, infer Error>
 			? Error
-			: never;
-	export type InferValue<T> = T extends AsyncResult<infer Value, any>
-		? Value
-		: T extends Result<infer Value, any>
+			: T extends Result<any, infer Error>
+				? Error
+				: never;
+	export type InferValue<T> =
+		T extends AsyncResult<infer Value, any>
 			? Value
-			: T;
+			: T extends Result<infer Value, any>
+				? Value
+				: T;
 	export type InferResultFromGenerator<T> = T extends Generator | AsyncGenerator
 		? IfGeneratorAsync<
 				T,

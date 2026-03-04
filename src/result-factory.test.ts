@@ -1,19 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { AsyncResult, Result } from "./index.js";
-
-class CustomError extends Error {}
-
-class ErrorA extends Error {
-	readonly type = "a";
-}
-
-class ErrorB extends Error {
-	readonly type = "b";
-}
-
-const errorA = new ErrorA("some error");
-
-const sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+import { CustomError, ErrorA, ErrorB, errorA, sleep } from "./test-helpers.js";
 
 describe("Result", () => {
 	describe("Result.isResult", () => {
@@ -27,6 +14,13 @@ describe("Result", () => {
 			if (Result.isResult(possibleResult)) {
 				expectTypeOf(possibleResult).toEqualTypeOf<Result<number, ErrorA>>();
 			}
+		});
+
+		it("returns false for non-Result values", () => {
+			expect(Result.isResult(null)).toBe(false);
+			expect(Result.isResult(undefined)).toBe(false);
+			expect(Result.isResult(42)).toBe(false);
+			expect(Result.isResult({ value: 1, isOk: true })).toBe(false);
 		});
 	});
 
@@ -44,6 +38,13 @@ describe("Result", () => {
 				>();
 			}
 		});
+
+		it("returns false for non-AsyncResult values", () => {
+			expect(Result.isAsyncResult(null)).toBe(false);
+			expect(Result.isAsyncResult(undefined)).toBe(false);
+			expect(Result.isAsyncResult(42)).toBe(false);
+			expect(Result.isAsyncResult(Result.ok(1))).toBe(false);
+		});
 	});
 
 	describe("Result.ok", () => {
@@ -55,6 +56,14 @@ describe("Result", () => {
 			expect(myResult.isResult).toBe(true);
 			expect(myResult.isOk()).toBe(true);
 			expect(myResult.isError()).toBe(false);
+		});
+
+		it("produces a Result.Ok<void> when called without arguments", () => {
+			const result = Result.ok();
+
+			expectTypeOf(result).toEqualTypeOf<Result.Ok<void>>();
+			expect(result.value).toBeUndefined();
+			expect(result.isOk()).toBe(true);
 		});
 	});
 
@@ -82,7 +91,7 @@ describe("Result", () => {
 		});
 	});
 
-	describe("Result.assertFailure", () => {
+	describe("Result.assertError", () => {
 		it("throws an error if the result is ok", () => {
 			const myResult: Result<number, ErrorA> = Result.ok(12);
 
@@ -95,7 +104,7 @@ describe("Result", () => {
 	});
 
 	describe("Result.try", () => {
-		it("sets the correct types", () => {
+		it("infers correct types for all overloads", () => {
 			const syncResult = Result.try(() => "some value");
 			expectTypeOf(syncResult).toEqualTypeOf<Result<string, Error>>();
 
@@ -316,7 +325,7 @@ describe("Result", () => {
 	});
 
 	describe("Result.wrap", () => {
-		it("sets the correct types", () => {
+		it("infers correct parameter and return types", () => {
 			const wrappedSum = Result.wrap((a: number, b: number) => a + b);
 			expectTypeOf(wrappedSum).parameters.toEqualTypeOf<[number, number]>();
 			expectTypeOf(wrappedSum).returns.toEqualTypeOf<Result<number, Error>>();
@@ -404,6 +413,17 @@ describe("Result", () => {
 			expect(result.error).toEqual(
 				new ErrorA("my message", { cause: new Error("boom") }),
 			);
+		});
+
+		it("forwards all arguments to the original function", () => {
+			const fn = vi.fn((a: string, b: number, c: boolean) => `${a}-${b}-${c}`);
+			const wrapped = Result.wrap(fn);
+
+			const result = wrapped("hello", 42, true);
+
+			Result.assertOk(result);
+			expect(result.value).toBe("hello-42-true");
+			expect(fn).toHaveBeenCalledWith("hello", 42, true);
 		});
 	});
 
@@ -687,6 +707,25 @@ describe("Result", () => {
 			Result.assertOk(result);
 			expect(result.value).toEqual(["a", 3]);
 		});
+
+		it("returns an ok result with an empty tuple when called with no arguments", () => {
+			const result = Result.allCatching();
+
+			Result.assertOk(result);
+			expect(result.value).toEqual([]);
+		});
+
+		it("does not invoke functions after the first failure (short-circuit)", () => {
+			const notCalled = vi.fn(() => "should not be called");
+
+			const result = Result.allCatching(
+				Result.error(new CustomError()) as Result<string, CustomError>,
+				notCalled,
+			);
+
+			Result.assertError(result);
+			expect(notCalled).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("Result.all", () => {
@@ -763,7 +802,14 @@ describe("Result", () => {
 				Result.all("a", (): number => {
 					throw new CustomError();
 				}),
-			).to.throw(CustomError);
+			).toThrow(CustomError);
+		});
+
+		it("returns an ok result with an empty tuple when called with no arguments", () => {
+			const result = Result.all();
+
+			Result.assertOk(result);
+			expect(result.value).toEqual([]);
 		});
 	});
 
@@ -1127,15 +1173,15 @@ describe("Result", () => {
 			expectTypeOf(result).toEqualTypeOf<AsyncResult<number, ErrorA>>();
 		});
 
-		it("does not track thrown expections", () => {
+		it("does not track thrown exceptions", () => {
 			expect(() =>
 				Result.gen(function* () {
 					throw new CustomError("Boom!");
 				}),
-			).to.throw(CustomError);
+			).toThrow(CustomError);
 		});
 
-		it("does not track thrown expections in async generator functions", async () => {
+		it("does not track thrown exceptions in async generator functions", async () => {
 			await expect(() =>
 				Result.gen(async function* () {
 					throw new CustomError("Boom!");
@@ -1143,7 +1189,7 @@ describe("Result", () => {
 			).rejects.toThrow(CustomError);
 		});
 
-		it("mixed", async () => {
+		it("handles mix of Result, AsyncResult, and plain generator yields", async () => {
 			function* someOtherFunc() {
 				yield 5; // this should be simply ignored
 				return 4;
@@ -1171,7 +1217,7 @@ describe("Result", () => {
 			expect(result).toEqual(Result.ok(10));
 		});
 
-		it("allows to to pass the 'this' context", () => {
+		it("allows you to pass the 'this' context", () => {
 			class MyClass {
 				constructor(public someValue: number) {}
 
@@ -1337,7 +1383,7 @@ describe("Result", () => {
 			expect(result.error).toEqual(new Error("Boom!"));
 		});
 
-		it("allows to to pass the 'this' context", () => {
+		it("allows you to pass the 'this' context", () => {
 			class MyClass {
 				constructor(public someValue: number) {}
 

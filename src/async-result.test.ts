@@ -1,23 +1,13 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { AsyncResult, Result } from "./index.js";
-
-class CustomError extends Error {}
-
-class ErrorA extends Error {
-	readonly type = "a";
-}
-
-class ErrorB extends Error {
-	readonly type = "b";
-}
-
-class ErrorC extends Error {
-	readonly type = "c";
-}
-
-const errorA = new ErrorA("some error");
-
-const sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+import {
+	CustomError,
+	ErrorA,
+	ErrorB,
+	ErrorC,
+	errorA,
+	sleep,
+} from "./test-helpers.js";
 
 describe("AsyncResult", () => {
 	describe("AsyncResult.fromPromise", () => {
@@ -153,7 +143,7 @@ describe("AsyncResult", () => {
 			});
 		});
 
-		describe("errorOrNull", async () => {
+		describe("errorOrNull", () => {
 			it("returns the error on failure", async () => {
 				const asyncResult = AsyncResult.error(errorA) as AsyncResult<
 					number,
@@ -202,14 +192,14 @@ describe("AsyncResult", () => {
 			it("is aware whether there is a possible error or not", async () => {
 				const okResult = AsyncResult.ok(42);
 				expectTypeOf(await okResult).toEqualTypeOf<Result<number, never>>();
-				// since the error type is 'never', in this case, the error can only be a number
+				// since the error type is 'never', in this case, the value can only be a number
 				expectTypeOf(await okResult.getOrNull()).toEqualTypeOf<number>();
 
 				const failureResult = AsyncResult.error(new CustomError());
 				expectTypeOf(await failureResult).toEqualTypeOf<
 					Result<never, CustomError>
 				>();
-				// since the value type is 'never', in this case, the value can only be a number
+				// since the value type is 'never', in this case, the value can only be null
 				expectTypeOf(await failureResult.getOrNull()).toEqualTypeOf<null>();
 			});
 		});
@@ -527,7 +517,7 @@ describe("AsyncResult", () => {
 				expect(nextResult.value).toBe(4);
 			});
 
-			it("lets you map over an encapsulated failed value by simply ignoring the transform function and returning the failed result", async () => {
+			it("skips transform and preserves error on failure", async () => {
 				const result = AsyncResult.error(new CustomError()) as AsyncResult<
 					number,
 					CustomError

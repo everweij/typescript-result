@@ -1,22 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { AsyncResult, NonExhaustiveError, Result } from "./index.js";
 import type { RedundantElseClauseError } from "./matcher.js";
-
-class CustomError extends Error {}
-
-class ErrorA extends Error {
-	readonly type = "a";
-}
-
-class ErrorB extends Error {
-	readonly type = "b";
-}
-
-class ErrorC extends Error {
-	readonly type = "c";
-}
-
-const errorA = new ErrorA("some error");
+import { CustomError, ErrorA, ErrorB, ErrorC, errorA } from "./test-helpers.js";
 
 describe("Result", () => {
 	describe("instance methods and getters", () => {
@@ -115,7 +100,7 @@ describe("Result", () => {
 			});
 		});
 
-		describe("isFailure", () => {
+		describe("isError", () => {
 			it("returns true if the result is a failure", () => {
 				const result: Result<number, ErrorA> = Result.error(errorA);
 				expect(result.isError()).toBe(true);
@@ -283,12 +268,12 @@ describe("Result", () => {
 			it("is aware whether there is a possible error or not", () => {
 				const okResult = Result.ok(42);
 				expectTypeOf(okResult).toEqualTypeOf<Result.Ok<number>>();
-				// since the error type is 'never', in this case, the error can only be a number
+				// since the error type is 'never', in this case, the value can only be a number
 				expectTypeOf(okResult.getOrNull()).toEqualTypeOf<number>();
 
 				const failureResult = Result.error(new CustomError());
 				expectTypeOf(failureResult).toEqualTypeOf<Result.Error<CustomError>>();
-				// since the value type is 'never', in this case, the value can only be a number
+				// since the value type is 'never', in this case, the value can only be null
 				expectTypeOf(failureResult.getOrNull()).toEqualTypeOf<null>();
 			});
 		});
@@ -635,7 +620,7 @@ describe("Result", () => {
 				expect(nextResult.value).toBe(4);
 			});
 
-			it("lets you map over an encapsulated failed value by simply ignoring the transform function and returning the failed result", () => {
+			it("skips transform and preserves error on failure", () => {
 				const result = Result.error(new CustomError()) as Result<
 					number,
 					CustomError
@@ -713,7 +698,7 @@ describe("Result", () => {
 					Result.ok(2).map((): number => {
 						throw new CustomError();
 					}),
-				).to.throw(CustomError);
+				).toThrow(CustomError);
 			});
 
 			it("will convert a failure into an async-result when an async transform function was given", async () => {
@@ -885,7 +870,7 @@ describe("Result", () => {
 						throw new CustomError();
 					});
 
-				expect(fn).not.to.throw(CustomError);
+				expect(fn).not.toThrow(CustomError);
 
 				const result = fn();
 				Result.assertError(result);
@@ -945,7 +930,7 @@ describe("Result", () => {
 						},
 					);
 
-				expect(fn).to.throw(/boom/);
+				expect(fn).toThrow(/boom/);
 			});
 
 			it("allows you to transform any caught error during async mapping", async () => {
@@ -1062,7 +1047,7 @@ describe("Result", () => {
 						throw new Error("boom");
 					});
 
-				expect(fn).to.throw(/boom/);
+				expect(fn).toThrow(/boom/);
 			});
 
 			it("ignores the operation when the result is ok", () => {
@@ -1101,7 +1086,7 @@ describe("Result", () => {
 					result.recover((_error) => {
 						throw ERROR;
 					}),
-				).to.throw(ERROR);
+				).toThrow(ERROR);
 			});
 
 			it("gets simply ignored when the result is ok", () => {
@@ -1410,7 +1395,7 @@ describe("Result", () => {
 						.when(ErrorB, () => "b")
 						// @ts-expect-error
 						.run(),
-				).to.toThrowError(new NonExhaustiveError(err));
+				).toThrowError(new NonExhaustiveError(err));
 			});
 
 			it("accepts literal values as well", () => {
@@ -1540,7 +1525,7 @@ describe("Issue #25: generic wrapper functions", () => {
 		expectTypeOf(resultB).toEqualTypeOf<AsyncResult<number, never>>();
 	});
 
-	it("let's you define interfaces when work with generic results", () => {
+	it("lets you define interfaces when working with generic results", () => {
 		class RunnerError extends Error {
 			readonly type = "runner-error";
 		}

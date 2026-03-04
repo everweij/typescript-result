@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { assertUnreachable } from "./helpers.js";
 import { Result } from "./index.js";
 
 describe("User management app", () => {
 	let count = 0;
+
+	beforeEach(() => {
+		count = 0;
+	});
 
 	const isValidEmail = (email: string) => /\S+@\S+\.\S+/.test(email);
 	const isValidName = (name: string) => name.length > 3 && name.length < 10;
@@ -146,13 +150,13 @@ describe("User management app", () => {
 
 		updateUserEmail(id: number, email: string) {
 			return this.userService.updateUserEmail(id, email).fold(
-				(user) => ({ status: 200, data: user }),
+				(user) => ({ status: 200 as const, data: user }),
 				(error) => {
 					switch (error.type) {
 						case "not-found-error":
-							return { status: 404, data: { message: error.message } };
+							return { status: 404 as const, data: { message: error.message } };
 						case "validation-error":
-							return { status: 400, data: { message: error.message } };
+							return { status: 400 as const, data: { message: error.message } };
 						default:
 							return assertUnreachable(error);
 					}
@@ -174,7 +178,7 @@ describe("User management app", () => {
 		});
 	});
 
-	it("does not create a new user when the e-mailaddress does not match the correct pattern", async () => {
+	it("rejects user creation with invalid email", async () => {
 		const app = createApp();
 		const outcome = await app.createUser("John", "invalidemail.com");
 
@@ -184,7 +188,7 @@ describe("User management app", () => {
 		});
 	});
 
-	it("does not create a new user when the name is too short", async () => {
+	it("rejects user creation with too short name", async () => {
 		const app = createApp();
 		const outcome = await app.createUser("Jo", "info@john.com");
 
@@ -194,7 +198,7 @@ describe("User management app", () => {
 		});
 	});
 
-	it("does not create a new user when the e-mailaddress is already in use", async () => {
+	it("rejects user creation with duplicate email", async () => {
 		const app = createApp();
 
 		const firstUserOutcome = await app.createUser("John", "info@john.com");
@@ -207,12 +211,13 @@ describe("User management app", () => {
 		});
 	});
 
-	it("updates the e-mailaddress of a user", async () => {
+	it("updates user email", async () => {
 		const app = createApp();
 		const createOutcome = await app.createUser("John", "info@john.com");
 		expect(createOutcome.status).toBe(200);
 
-		const id = (createOutcome.data as UserDto).id;
+		if (createOutcome.status !== 200) throw new Error("Expected 200");
+		const id = createOutcome.data.id;
 
 		const updateOutcome = await app.updateUserEmail(id, "new@john.com");
 		expect(updateOutcome).toEqual({
@@ -221,12 +226,13 @@ describe("User management app", () => {
 		});
 	});
 
-	it("does not update the e-mailaddress of a user when the e-mailaddress does not match the correct pattern", async () => {
+	it("rejects email update with invalid email", async () => {
 		const app = createApp();
 		const createOutcome = await app.createUser("John", "info@john.com");
 		expect(createOutcome.status).toBe(200);
 
-		const id = (createOutcome.data as UserDto).id;
+		if (createOutcome.status !== 200) throw new Error("Expected 200");
+		const id = createOutcome.data.id;
 
 		const updateOutcome = await app.updateUserEmail(id, "invalid.com");
 		expect(updateOutcome).toEqual({
@@ -235,7 +241,7 @@ describe("User management app", () => {
 		});
 	});
 
-	it("does not update the e-mailaddress of a user the user does not exist", async () => {
+	it("rejects email update when user does not exist", async () => {
 		const app = createApp();
 		const updateOutcome = await app.updateUserEmail(2, "info@john.com");
 		expect(updateOutcome).toEqual({

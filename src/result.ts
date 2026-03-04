@@ -148,6 +148,14 @@ type AccountForThrowing<T extends any[]> = {
 
 /**
  * Represents the asynchronous outcome of an operation that can either succeed or fail.
+ *
+ * `AsyncResult` extends `Promise`, so it can be awaited to obtain the underlying {@linkcode Result}.
+ * Unlike a raw `Promise`, it exposes chainable methods like {@linkcode AsyncResult.map},
+ * {@linkcode AsyncResult.recover}, and {@linkcode AsyncResult.fold} that operate on the eventual
+ * result without requiring intermediate `await` calls.
+ *
+ * `AsyncResult` also supports `yield*` inside generator functions passed to {@linkcode Result.gen},
+ * allowing you to short-circuit on errors in an async pipeline.
  */
 export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	/**
@@ -158,14 +166,32 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	}
 
 	/**
-	 * Utility getter to infer the value type of the result.
-	 * Note: this getter does not hold any value, it's only used for type inference.
+	 * Utility getter to infer the value type of the result at the type level.
+	 * This getter has no runtime value — it only exists for type inference.
+	 *
+	 * An alternative is the `Result.InferValue<T>` utility type.
+	 *
+	 * @example
+	 * ```ts
+	 * function logValue<T extends AsyncResult<any, any>>(result: T) {
+	 *   type Value = T["$inferValue"]; // inferred value type
+	 * }
+	 * ```
 	 */
 	declare $inferValue: Value;
 
 	/**
-	 * Utility getter to infer the error type of the result.
-	 * Note: this getter does not hold any value, it's only used for type inference.
+	 * Utility getter to infer the error type of the result at the type level.
+	 * This getter has no runtime value — it only exists for type inference.
+	 *
+	 * An alternative is the `Result.InferError<T>` utility type.
+	 *
+	 * @example
+	 * ```ts
+	 * function handleError<T extends AsyncResult<any, any>>(result: T) {
+	 *   type Err = T["$inferError"]; // inferred error type
+	 * }
+	 * ```
 	 */
 	declare $inferError: Err;
 
@@ -174,7 +200,8 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	}
 
 	/**
-	 * Utility getter to check if the current instance is an `AsyncResult`.
+	 * Always returns `true` on `AsyncResult` instances. Useful for duck-typing checks when the
+	 * concrete class is not available (e.g. across package boundaries).
 	 */
 	get isAsyncResult(): true {
 		return true;
@@ -418,7 +445,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * @example
 	 * using an async callback
 	 * ```ts
-	 * declare const result: AsyncResultResult<number, Error>;
+	 * declare const result: AsyncResult<number, Error>;
 	 *
 	 * const asyncResult = await result.onSuccess(async (value) => someAsyncOperation(value));
 	 * ```
@@ -449,7 +476,10 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 * as-is (the `Error` types will be merged). Conceptually, it is similar to `Array.flatMap`.
 	 * This map operation will be ignored if the current result represents a failure.
 	 *
-	 * @param transform callback function to transform the value of the result. The callback can be async or a generator function as well.
+	 * This is the async counterpart of {@linkcode Result.map} — it always returns an
+	 * {@linkcode AsyncResult} regardless of whether the transform is sync or async.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async or a generator function as well
 	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
 	 *
 	 * > [!NOTE]
@@ -562,13 +592,29 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	}
 
 	/**
-	 * Like {@linkcode AsyncResult.map} it transforms the value of a successful result using the {@link transformValue} callback.
-	 * In addition, it catches any exceptions that might be thrown inside the {@link transformValue} callback and encapsulates them
-	 * in a failed result.
+	 * Like {@linkcode AsyncResult.map}, but catches any exceptions that might be thrown inside the
+	 * {@link transformValue} callback and encapsulates them in a failed result.
 	 *
-	 * @param transformValue callback function to transform the value of the result. The callback can be async or a generator function as well.
-	 * @param transformError callback function to transform any potential caught error while transforming the value.
+	 * @param transformValue callback function to transform the value of the result. The callback can be async or a generator function as well
+	 * @param transformError optional callback to transform the caught error. Defaults to `Error` when not provided
 	 * @returns a new {@linkcode AsyncResult} instance with the transformed value
+	 *
+	 * @example Catching a thrown exception during transformation
+	 * ```ts
+	 * declare const result: AsyncResult<string, never>;
+	 *
+	 * const parsed = result.mapCatching((json) => JSON.parse(json)); // AsyncResult<any, Error>
+	 * ```
+	 *
+	 * @example Using transformError to provide domain errors
+	 * ```ts
+	 * declare const result: AsyncResult<string, never>;
+	 *
+	 * const parsed = result.mapCatching(
+	 *   (json) => JSON.parse(json),
+	 *   (error) => new ParseError("Invalid JSON", { cause: error }),
+	 * ); // AsyncResult<any, ParseError>
+	 * ```
 	 */
 	// Dead-end: value is never (only failure possible), mapCatching is ignored
 	mapCatching(
@@ -790,14 +836,33 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	}
 
 	/**
-	 * Like {@linkcode AsyncResult.recover} it transforms a failed result using the {@link onFailure} callback into a successful result.
-	 * In addition, it catches any exceptions that might be thrown inside the {@link onFailure} callback and encapsulates them
-	 * in a failed result.
+	 * Like {@linkcode AsyncResult.recover}, but catches any exceptions that might be thrown inside the
+	 * {@link onFailure} callback and encapsulates them in a failed result.
 	 *
-	 * @param onFailure callback function to transform the error of the result. The callback can be async or a generator function as well.
-	 * @param transformError callback function to transform any potential caught error while recovering the result.
+	 * @param onFailure callback function to transform the error of the result. The callback can be async or a generator function as well
+	 * @param transformError optional callback to transform the caught error. Defaults to `Error` when not provided
 	 * @returns a new successful {@linkcode AsyncResult} instance when the result represents a failure, or the original instance
-	 * if it represents a success.
+	 * if it represents a success
+	 *
+	 * @example Catching a thrown exception during recovery
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const recovered = result.recoverCatching((error) => {
+	 *   if (error.message === "fatal") throw new Error("unrecoverable");
+	 *   return 0;
+	 * }); // AsyncResult<number, Error>
+	 * ```
+	 *
+	 * @example Using transformError to provide domain errors
+	 * ```ts
+	 * declare const result: AsyncResult<number, Error>;
+	 *
+	 * const recovered = result.recoverCatching(
+	 *   (error) => { throw new Error("recovery failed"); },
+	 *   (error) => new RecoveryError("Could not recover", { cause: error }),
+	 * ); // AsyncResult<number, RecoveryError>
+	 * ```
 	 */
 	// Dead-end: error is never (only success possible), recoverCatching is ignored
 	recoverCatching(
@@ -883,7 +948,18 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	}
 
 	/**
-	 * Print-friendly representation of the `AsyncResult` instance.
+	 * Returns a string representation of the `AsyncResult` instance.
+	 *
+	 * Unlike {@linkcode Result.toString}, this always returns `"AsyncResult"` because the actual
+	 * value is not yet resolved.
+	 *
+	 * @returns `"AsyncResult"`
+	 *
+	 * @example
+	 * ```ts
+	 * const result = Result.fromAsync(Promise.resolve(42));
+	 * result.toString(); // "AsyncResult"
+	 * ```
 	 */
 	override toString(): string {
 		return "AsyncResult";
@@ -946,6 +1022,13 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 
 /**
  * Represents the outcome of an operation that can either succeed or fail.
+ *
+ * Use the {@linkcode Result.ok} discriminant property to narrow the result into its success (`Result.Ok<V>`)
+ * or failure (`Result.Error<E>`) variant. When narrowed, `value` and `error` are available with their
+ * precise types.
+ *
+ * Instances are created via the static factory methods on the `Result` namespace (e.g.
+ * {@linkcode Result.ok}, {@linkcode Result.error}, {@linkcode Result.try}, {@linkcode Result.gen}).
  */
 export class Result<Value, Err> {
 	constructor(
@@ -954,14 +1037,32 @@ export class Result<Value, Err> {
 	) {}
 
 	/**
-	 * Utility getter to infer the value type of the result.
-	 * Note: this getter does not hold any value, it's only used for type inference.
+	 * Utility getter to infer the value type of the result at the type level.
+	 * This getter has no runtime value — it only exists for type inference.
+	 *
+	 * An alternative is the `Result.InferValue<T>` utility type.
+	 *
+	 * @example
+	 * ```ts
+	 * function logValue<T extends Result<any, any>>(result: T) {
+	 *   type Value = T["$inferValue"]; // inferred value type
+	 * }
+	 * ```
 	 */
 	declare $inferValue: Value;
 
 	/**
-	 * Utility getter to infer the error type of the result.
-	 * Note: this getter does not hold any value, it's only used for type inference.
+	 * Utility getter to infer the error type of the result at the type level.
+	 * This getter has no runtime value — it only exists for type inference.
+	 *
+	 * An alternative is the `Result.InferError<T>` utility type.
+	 *
+	 * @example
+	 * ```ts
+	 * function handleError<T extends Result<any, any>>(result: T) {
+	 *   type Err = T["$inferError"]; // inferred error type
+	 * }
+	 * ```
 	 */
 	declare $inferError: Err;
 
@@ -970,7 +1071,8 @@ export class Result<Value, Err> {
 	}
 
 	/**
-	 * Utility getter that checks if the current instance is a `Result`.
+	 * Always returns `true` on `Result` instances. Useful for duck-typing checks when the
+	 * concrete class is not available (e.g. across package boundaries).
 	 */
 	get isResult(): true {
 		return true;
@@ -1043,6 +1145,39 @@ export class Result<Value, Err> {
 		return this.error !== undefined;
 	}
 
+	/**
+	 * Discriminant property that indicates whether the result represents a success (`true`) or a failure (`false`).
+	 * This is the primary way to narrow a `Result` into its `Result.Ok` or `Result.Error` variant.
+	 *
+	 * When `ok` is `true`, TypeScript narrows the result so that `value` is available and `error` is `undefined`.
+	 * When `ok` is `false`, `error` is available and `value` is `undefined`.
+	 *
+	 * @example Type narrowing with if/else
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * if (result.ok) {
+	 *   result.value; // number
+	 *   result.error; // undefined
+	 * } else {
+	 *   result.error; // Error
+	 *   result.value; // undefined
+	 * }
+	 * ```
+	 *
+	 * @example Early return pattern
+	 * ```ts
+	 * function handle(result: Result<User, NotFoundError>) {
+	 *   if (!result.ok) {
+	 *     return result.match()
+	 *       .when(NotFoundError, () => "not found")
+	 *       .run();
+	 *   }
+	 *
+	 *   return result.value.name; // User
+	 * }
+	 * ```
+	 */
 	get ok() {
 		return this.success as [Err] extends [never] ? true : false;
 	}
@@ -1262,36 +1397,57 @@ export class Result<Value, Err> {
 	}
 
 	/**
-	 * Allows you to effectively match the errors of a failed result using the returned instance of the {@link Matcher} class.
-	 * Note: this method can only be called on a failed result, otherwise it will return `undefined`. You can narrow the result
-	 * by checking the `ok` property.
+	 * Allows you to match the errors of a failed result using the returned {@link Matcher} instance.
+	 * This method can only be called on a failed result — you must first narrow the result by checking
+	 * the {@linkcode Result.ok} property.
 	 *
-	 * @returns {@link Matcher} instance that can be used to build a chain of matching patterns for the errors of the result.
+	 * If called without narrowing, TypeScript will return a descriptive string literal type as a compile-time hint
+	 * instead of a `Matcher`, guiding you to narrow first.
 	 *
-	 * @example
-	 * Matching against error classes
+	 * Key behaviors:
+	 * - **Exhaustive checking**: if you forget to handle an error type, `run()` will produce a compile-time error
+	 * - **`else()` fallback**: handles any remaining unmatched errors. Cannot be called if all cases are already covered
+	 * - **Multiple types per `when()`**: pass multiple error types to handle them with a single handler
+	 * - **Async callbacks**: if any handler is async, `run()` returns a Promise
+	 *
+	 * @returns {@link Matcher} instance that can be used to build a chain of matching patterns for the errors of the result
+	 *
+	 * @example Matching against error classes
 	 * ```ts
 	 * declare const result: Result<number, NotFoundError | UserDeactivatedError>;
 	 *
 	 * if (!result.ok) {
 	 *   return result
 	 *     .match()
-	 * 		   .when(NotFoundError, (error) => console.error("User not found", error))
-	 * 		   .when(UserDeactivatedError, (error) => console.error("User is deactivated", error))
-	 *       .run()
+	 *     .when(NotFoundError, (error) => ({ status: 404 }))
+	 *     .when(UserDeactivatedError, (error) => ({ status: 403 }))
+	 *     .run();
 	 * }
 	 * ```
 	 *
-	 * @example
-	 * Matching against string constants with an else clause
+	 * @example Multiple error types in a single handler
 	 * ```ts
-	 * declare const result: Result<number, "not-found" | "user-deactivated">;
+	 * declare const result: Result<number, ErrorA | ErrorB | ErrorC>;
+	 *
 	 * if (!result.ok) {
-	 *   return result
+	 *   result
 	 *     .match()
-	 * 		   .when("not-found", (error) => console.error("User not found", error))
-	 *       .else((error) => console.error("Unknown error", error))
-	 *       .run()
+	 *     .when(ErrorA, ErrorB, () => console.error("A or B"))
+	 *     .when(ErrorC, () => console.error("C"))
+	 *     .run();
+	 * }
+	 * ```
+	 *
+	 * @example Using else() as a fallback
+	 * ```ts
+	 * declare const result: Result<number, "not-found" | "forbidden" | "other">;
+	 *
+	 * if (!result.ok) {
+	 *   result
+	 *     .match()
+	 *     .when("not-found", () => console.error("Not found"))
+	 *     .else((error) => console.error("Other error:", error))
+	 *     .run();
 	 * }
 	 * ```
 	 */
@@ -1454,9 +1610,13 @@ export class Result<Value, Err> {
 	 * as-is (the `Error` types will be merged). Conceptually, it is similar to `Array.flatMap`.
 	 * This map operation will be ignored if the current result represents a failure.
 	 *
-	 * @param transform callback function to transform the value of the result. The callback can be async or a generator function as well.
+	 * When the transform callback is async or returns a Promise/AsyncResult, the result
+	 * automatically becomes an {@linkcode AsyncResult}. See {@linkcode AsyncResult.map} for
+	 * the async counterpart.
+	 *
+	 * @param transform callback function to transform the value of the result. The callback can be async or a generator function as well
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
-	 * if the transform function is async.
+	 * if the transform function is async
 	 *
 	 * > [!NOTE]
 	 * > Any exceptions that might be thrown inside the {@link transform} callback are not caught, so it is your responsibility
@@ -1582,14 +1742,30 @@ export class Result<Value, Err> {
 	}
 
 	/**
-	 * Like {@linkcode Result.map} it transforms the value of a successful result using the {@link transformValue} callback.
-	 * In addition, it catches any exceptions that might be thrown inside the {@link transformValue} callback and encapsulates them
-	 * in a failed result.
+	 * Like {@linkcode Result.map}, but catches any exceptions that might be thrown inside the
+	 * {@link transformValue} callback and encapsulates them in a failed result.
 	 *
-	 * @param transformValue callback function to transform the value of the result. The callback can be async or a generator function as well.
-	 * @param transformError callback function to transform any potential caught error while transforming the value.
+	 * @param transformValue callback function to transform the value of the result. The callback can be async or a generator function as well
+	 * @param transformError optional callback to transform the caught error. Defaults to `Error` when not provided
 	 * @returns a new {@linkcode Result} instance with the transformed value, or a new {@linkcode AsyncResult} instance
-	 * if the transform function is async.
+	 * if the transform function is async
+	 *
+	 * @example Catching a thrown exception during transformation
+	 * ```ts
+	 * declare const result: Result<string, never>;
+	 *
+	 * const parsed = result.mapCatching((json) => JSON.parse(json)); // Result<any, Error>
+	 * ```
+	 *
+	 * @example Using transformError to provide domain errors
+	 * ```ts
+	 * declare const result: Result<string, never>;
+	 *
+	 * const parsed = result.mapCatching(
+	 *   (json) => JSON.parse(json),
+	 *   (error) => new ParseError("Invalid JSON", { cause: error }),
+	 * ); // Result<any, ParseError>
+	 * ```
 	 */
 	// Dead-end: value is never (only failure possible), mapCatching is ignored
 	mapCatching(
@@ -1819,14 +1995,33 @@ export class Result<Value, Err> {
 	}
 
 	/**
-	 * Like {@linkcode Result.recover} it transforms a failed result using the {@link onFailure} callback into a successful result.
-	 * In addition, it catches any exceptions that might be thrown inside the {@link onFailure} callback and encapsulates them
-	 * in a failed result.
+	 * Like {@linkcode Result.recover}, but catches any exceptions that might be thrown inside the
+	 * {@link onFailure} callback and encapsulates them in a failed result.
 	 *
-	 * @param onFailure callback function to transform the error of the result. The callback can be async or a generator function as well.
-	 * @param transformError callback function to transform any potential caught error while recovering the result.
+	 * @param onFailure callback function to transform the error of the result. The callback can be async or a generator function as well
+	 * @param transformError optional callback to transform the caught error. Defaults to `Error` when not provided
 	 * @returns a new successful {@linkcode Result} instance or a new successful {@linkcode AsyncResult} instance
-	 * when the result represents a failure, or the original instance if it represents a success.
+	 * when the result represents a failure, or the original instance if it represents a success
+	 *
+	 * @example Catching a thrown exception during recovery
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const recovered = result.recoverCatching((error) => {
+	 *   if (error.message === "fatal") throw new Error("unrecoverable");
+	 *   return 0;
+	 * }); // Result<number, Error>
+	 * ```
+	 *
+	 * @example Using transformError to provide domain errors
+	 * ```ts
+	 * declare const result: Result<number, Error>;
+	 *
+	 * const recovered = result.recoverCatching(
+	 *   (error) => { throw new Error("recovery failed"); },
+	 *   (error) => new RecoveryError("Could not recover", { cause: error }),
+	 * ); // Result<number, RecoveryError>
+	 * ```
 	 */
 	// Dead-end: error is never (only success possible), recoverCatching is ignored
 	recoverCatching(
@@ -1927,7 +2122,17 @@ export class Result<Value, Err> {
 	}
 
 	/**
-	 * Returns a string representation of the result.
+	 * Returns a string representation of the result, including the encapsulated value or error.
+	 *
+	 * @returns `"Result.ok(<value>)"` for successful results, `"Result.error(<error>)"` for failures
+	 *
+	 * @example
+	 * ```ts
+	 * Result.ok(42).toString();              // "Result.ok(42)"
+	 * Result.ok("hello").toString();          // "Result.ok(hello)"
+	 * Result.error("not found").toString();   // "Result.error(not found)"
+	 * Result.error(new Error("x")).toString(); // "Result.error(Error: x)"
+	 * ```
 	 */
 	toString(): string {
 		if (this.success) {
@@ -1938,6 +2143,20 @@ export class Result<Value, Err> {
 	}
 }
 
+/**
+ * Static factory and utility methods for working with {@linkcode Result} and {@linkcode AsyncResult}.
+ *
+ * This class is re-exported as the `Result` namespace, so all methods are available as `Result.ok()`,
+ * `Result.error()`, `Result.try()`, `Result.gen()`, `Result.all()`, `Result.wrap()`, etc.
+ *
+ * Key methods:
+ * - {@linkcode ResultFactory.ok | Result.ok} / {@linkcode ResultFactory.error | Result.error} — create result instances
+ * - {@linkcode ResultFactory.try | Result.try} — execute a function and catch exceptions
+ * - {@linkcode ResultFactory.gen | Result.gen} — run a generator function with `yield*` short-circuiting
+ * - {@linkcode ResultFactory.all | Result.all} — combine multiple operations (like `Promise.all`)
+ * - {@linkcode ResultFactory.wrap | Result.wrap} — wrap an existing function to return a result
+ * - {@linkcode ResultFactory.fromAsync | Result.fromAsync} — lift a Promise into an AsyncResult
+ */
 export class ResultFactory {
 	/* c8 ignore next */
 	private constructor() {}
@@ -2135,8 +2354,7 @@ export class ResultFactory {
 	 * > to handle these exceptions. Please refer to {@linkcode Result.allCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
 	 *
-	 * @example
-	 * basic usage
+	 * @example Combining multiple results
 	 * ```ts
 	 * declare function createTask(name: string): Result<Task, IOError>;
 	 *
@@ -2144,8 +2362,7 @@ export class ResultFactory {
 	 * const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
 	 * ```
 	 *
-	 * @example
-	 * running multiple operations and combining the results
+	 * @example Mixing different input types
 	 * ```ts
 	 * const result = Result.all(
 	 *   "a",
@@ -2173,9 +2390,32 @@ export class ResultFactory {
 	}
 
 	/**
-	 * Similar to {@linkcode Result.all}, but catches any exceptions that might be thrown during the operations.
-	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}.
-	 * @returns combined result of all the operations.
+	 * Similar to {@linkcode Result.all}, but catches any exceptions that might be thrown during the operations
+	 * and encapsulates them in a failed result. The error type of thrown exceptions defaults to `Error` unless
+	 * a `transformError` is provided at the call-site level (e.g. via wrapped functions).
+	 *
+	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}
+	 * @returns combined result of all the operations
+	 *
+	 * @example Catching a thrown exception
+	 * ```ts
+	 * const result = Result.allCatching(
+	 *   () => { throw new Error("boom"); },
+	 *   Result.ok(42),
+	 * ); // Result<[never, number], Error>
+	 *
+	 * if (!result.ok) {
+	 *   result.error; // Error
+	 * }
+	 * ```
+	 *
+	 * @example Catching an async rejection
+	 * ```ts
+	 * const result = Result.allCatching(
+	 *   Promise.reject(new Error("network failure")),
+	 *   Result.ok("cached"),
+	 * ); // AsyncResult<[never, string], Error>
+	 * ```
 	 */
 	static allCatching<
 		Items extends any[],
@@ -2199,16 +2439,35 @@ export class ResultFactory {
 	 * external functions that might throw exceptions.
 	 * The returned function will catch any exceptions that might be thrown and encapsulate them in a failed result.
 	 *
-	 * @param fn function to wrap. Can be synchronous or asynchronous.
-	 * @returns a new function that returns a result.
+	 * @param fn function to wrap. Can be synchronous or asynchronous
+	 * @param transformError optional callback to transform the caught error into a more meaningful error
+	 * @returns a new function that returns a result
 	 *
-	 * @example
-	 * basic usage
+	 * @example Wrapping a synchronous function
 	 * ```ts
 	 * declare function divide(a: number, b: number): number;
 	 *
 	 * const safeDivide = Result.wrap(divide);
 	 * const result = safeDivide(10, 0); // Result<number, Error>
+	 * ```
+	 *
+	 * @example Wrapping an async function
+	 * ```ts
+	 * declare function fetchUser(id: string): Promise<User>;
+	 *
+	 * const safeFetchUser = Result.wrap(fetchUser);
+	 * const result = safeFetchUser("123"); // AsyncResult<User, Error>
+	 * ```
+	 *
+	 * @example Using transformError
+	 * ```ts
+	 * declare function parseConfig(raw: string): Config;
+	 *
+	 * const safeParseConfig = Result.wrap(
+	 *   parseConfig,
+	 *   (error) => new ConfigError("Invalid config", { cause: error }),
+	 * );
+	 * const result = safeParseConfig("{}"); // Result<Config, ConfigError>
 	 * ```
 	 */
 	static wrap<Fn extends AnyAsyncFunction, ErrorType = NativeError>(
@@ -2238,16 +2497,14 @@ export class ResultFactory {
 	 * @param transform optional callback to transform the caught error into a more meaningful error.
 	 * @returns a new {@linkcode Result} instance.
 	 *
-	 * @example
-	 * basic usage
+	 * @example Wrapping a throwing function
 	 * ```ts
 	 * declare function saveFileToDisk(filename: string): void; // might throw an error
 	 *
 	 * const result = Result.try(() => saveFileToDisk("file.txt")); // Result<void, Error>
 	 * ```
 	 *
-	 * @example
-	 * basic usage with error transformation
+	 * @example Transforming the caught error
 	 * ```ts
 	 * declare function saveFileToDisk(filename: string): void; // might throw an error
 	 *
@@ -2336,8 +2593,7 @@ export class ResultFactory {
 	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
 	 *
-	 * @example
-	 * basic usage
+	 * @example Wrapping an async callback
 	 *
 	 * ```ts
 	 * function findUserById(id: string) {
@@ -2372,8 +2628,7 @@ export class ResultFactory {
 	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
 	 * > and encapsulates them in a failed result.
 	 *
-	 * @example
-	 * basic usage
+	 * @example Lifting a Promise into an AsyncResult
 	 *
 	 * ```ts
 	 * declare function someAsyncOperation(): Promise<Result<number, Error>>;
@@ -2395,16 +2650,43 @@ export class ResultFactory {
 	}
 
 	/**
-	 * Similar to {@linkcode Result.fromAsync} this method transforms an async callback function into an {@linkcode AsyncResult} instance.
-	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
+	 * Similar to {@linkcode Result.fromAsync}, but catches any exceptions that might be thrown during the async
+	 * operation and encapsulates them in a failed result.
+	 *
+	 * @param fn async callback function that returns a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance
+	 * @param transformError optional callback to transform the caught error into a more meaningful error
+	 * @returns a new {@linkcode AsyncResult} instance
+	 *
+	 * @example Catching a thrown exception
+	 * ```ts
+	 * const result = Result.fromAsyncCatching(async () => {
+	 *   const response = await fetch("https://example.com/api");
+	 *   return response.json();
+	 * }); // AsyncResult<any, Error>
+	 * ```
+	 *
+	 * @example Using transformError
+	 * ```ts
+	 * const result = Result.fromAsyncCatching(
+	 *   async () => {
+	 *     const response = await fetch("https://example.com/api");
+	 *     return response.json();
+	 *   },
+	 *   (error) => new FetchError("API request failed", { cause: error }),
+	 * ); // AsyncResult<any, FetchError>
+	 * ```
 	 */
 	static fromAsyncCatching<T, ErrorType = NativeError>(
 		fn: () => Promise<T>,
 		transformError?: (err: unknown) => ErrorType,
 	): AsyncResult<ExtractValue<T>, ExtractError<T> | ErrorType>;
 	/**
-	 * Similar to {@linkcode Result.fromAsync} this method transforms a Promise into an {@linkcode AsyncResult} instance.
-	 * In addition, it catches any exceptions that might be thrown during the operation and encapsulates them in a failed result.
+	 * Similar to {@linkcode Result.fromAsync}, but catches any exceptions that might be thrown during the async
+	 * operation and encapsulates them in a failed result.
+	 *
+	 * @param value a Promise that holds a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance
+	 * @param transformError optional callback to transform the caught error into a more meaningful error
+	 * @returns a new {@linkcode AsyncResult} instance
 	 */
 	static fromAsyncCatching<T, ErrorType = NativeError>(
 		value: Promise<T>,
@@ -2474,8 +2756,7 @@ export class ResultFactory {
 	 * @param fn generator function with code to execute. Can be synchronous or asynchronous.
 	 * @returns a new {@linkcode Result} or {@linkcode AsyncResult} instance depending on the provided callback fn.
 	 *
-	 * @example
-	 * basic usage
+	 * @example Running an async generator pipeline
 	 * ```ts
 	 * const result = Result.gen(async function* () {
 	 *    const order = yield* getOrderById("123"); // AsyncResult<Order, NotFoundError>
@@ -2485,8 +2766,7 @@ export class ResultFactory {
 	 * }); // AsyncResult<string, NotFoundError | InvalidOrderStatusError>;
 	 * ```
 	 *
-	 * @example
-	 * this context
+	 * @example Binding a `this` context
 	 * ```ts
 	 * class MyClass {
 	 *   someValue = 12;
@@ -2561,9 +2841,34 @@ export class ResultFactory {
 	}
 
 	/**
-	 * Similar to {@linkcode Result.gen} this method transforms the given generator function into a {@linkcode Result} or {@linkcode AsyncResult}
-	 * depending on whether the generator function contains async operations or not.
-	 * In addition, it catches any exceptions that might be thrown during any operation and encapsulates them in a failed result.
+	 * Similar to {@linkcode Result.gen}, but catches any exceptions that might be thrown during any operation
+	 * and encapsulates them in a failed result. Returns a {@linkcode Result} or {@linkcode AsyncResult} depending
+	 * on whether the generator function contains async operations or not.
+	 *
+	 * @param generator a generator, generator function, or a `this` context followed by a generator function
+	 * @param transformError optional callback to transform the caught error into a more meaningful error
+	 * @returns a new {@linkcode Result} or {@linkcode AsyncResult} instance
+	 *
+	 * @example Catching a thrown exception inside a generator
+	 * ```ts
+	 * const result = Result.genCatching(function* () {
+	 *   const value = yield* Result.ok(42);
+	 *   if (value > 40) throw new Error("too large");
+	 *   return value;
+	 * }); // Result<number, Error>
+	 * ```
+	 *
+	 * @example Using transformError to provide domain errors
+	 * ```ts
+	 * const result = Result.genCatching(
+	 *   function* () {
+	 *     const user = yield* findUserById("123"); // Result<User, NotFoundError>
+	 *     const data = JSON.parse(user.rawData); // might throw SyntaxError
+	 *     return data;
+	 *   },
+	 *   (error) => new ParseError("Failed to parse user data", { cause: error }),
+	 * ); // Result<any, NotFoundError | ParseError>
+	 * ```
 	 */
 	static genCatching<
 		T extends Generator | AsyncGenerator,

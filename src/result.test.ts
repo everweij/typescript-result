@@ -1584,6 +1584,38 @@ describe("Result", () => {
 			});
 		});
 
+		describe("discrimination", () => {
+			it("Result.ok(undefined) is a success", () => {
+				const result = Result.ok(undefined);
+				expect(result.ok).toBe(true);
+				expect(result.value).toBeUndefined();
+			});
+
+			it("Result.ok(null).toTuple() returns [null, null]", () => {
+				const result = Result.ok(null);
+				const [value, error] = result.toTuple();
+				expect(value).toBeNull();
+				expect(error).toBeNull();
+			});
+
+			it("Result.ok(undefined).toTuple() returns [undefined, null]", () => {
+				const result = Result.ok(undefined);
+				const [value, error] = result.toTuple();
+				expect(value).toBeUndefined();
+				expect(error).toBeNull();
+			});
+
+			it("Result.error(undefined) should not compile", () => {
+				// @ts-expect-error undefined is not assignable to {}
+				Result.error(undefined);
+			});
+
+			it("Result.error(null) should not compile", () => {
+				// @ts-expect-error null is not assignable to {}
+				Result.error(null);
+			});
+		});
+
 		describe("errorOrNull", () => {
 			it("returns the error on failure", () => {
 				const result = Result.error(new CustomError()) as Result<
@@ -1943,6 +1975,30 @@ describe("Result", () => {
 
 				const resolvedOutcome = await outcome;
 				Result.assertError(resolvedOutcome);
+			});
+		});
+
+		describe("onSuccess async rejection", () => {
+			it("rejects instead of hanging when async action throws", async () => {
+				const result = Result.ok(42) as Result<number, ErrorA>;
+
+				const outcome = result.onSuccess(async () => {
+					throw new Error("boom");
+				});
+
+				await expect(outcome).rejects.toThrow("boom");
+			});
+		});
+
+		describe("onFailure async rejection", () => {
+			it("rejects instead of hanging when async action throws", async () => {
+				const result = Result.error(errorA) as Result<number, ErrorA>;
+
+				const outcome = result.onFailure(async () => {
+					throw new Error("boom");
+				});
+
+				await expect(outcome).rejects.toThrow("boom");
 			});
 		});
 

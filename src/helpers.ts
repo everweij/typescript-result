@@ -82,7 +82,9 @@ export type AnyAsyncFunction<Returning = any> = (
 
 export type NativeError = globalThis.Error;
 
-export type AnyValue = {};
+export type Defined = {};
+/** @deprecated Use {@link Defined} instead. */
+export type AnyValue = Defined;
 
 export type Contains<T, V, U = T> = (
 	T extends U

@@ -2,8 +2,8 @@ import type {
 	AnyAsyncFunction,
 	AnyFunction,
 	AnyPromise,
-	AnyValue,
 	Contains,
+	Defined,
 	NativeError,
 } from "./helpers.js";
 import {
@@ -827,7 +827,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			this.then(async (result) => {
 				try {
 					const outcome = await result.recover(onFailure);
-					resolve(outcome as any);
+					resolve(outcome as AnyOuterResult);
 				} catch (error) {
 					reject(error);
 				}
@@ -942,7 +942,9 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	) {
 		return new AsyncResult<any, any>((resolve, reject) =>
 			this.then((result) => {
-				resolve(result.recoverCatching(onFailure, transformError) as any);
+				resolve(
+					result.recoverCatching(onFailure, transformError) as AnyOuterResult,
+				);
 			}).catch(reject),
 		);
 	}
@@ -968,7 +970,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	/**
 	 * @internal
 	 */
-	static error<Error>(error: Error): AsyncResult<never, Error> {
+	static error<Error extends {}>(error: Error): AsyncResult<never, Error> {
 		return new AsyncResult((resolve) =>
 			resolve(ResultFactory.error(error) as OuterResult<never, Error>),
 		);
@@ -1032,6 +1034,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
  */
 export class Result<Value, Err> {
 	constructor(
+		private readonly _ok: boolean,
 		private readonly _value: Value,
 		private readonly _error: Err,
 	) {}
@@ -1138,11 +1141,11 @@ export class Result<Value, Err> {
 	}
 
 	private get success() {
-		return this.error === undefined;
+		return this._ok;
 	}
 
 	private get failure() {
-		return this.error !== undefined;
+		return !this._ok;
 	}
 
 	/**
@@ -1243,7 +1246,9 @@ export class Result<Value, Err> {
 	 * ```
 	 */
 	toTuple<T extends AnyResult, V = InferValue<T>, E = InferError<T>>(this: T) {
-		return [this._value ?? null, this._error ?? null] as [E] extends [never]
+		return [this._ok ? this._value : null, this._ok ? null : this._error] as [
+			E,
+		] extends [never]
 			? [value: V, error: never]
 			: [V] extends [never]
 				? [value: never, error: E]
@@ -1509,22 +1514,20 @@ export class Result<Value, Err> {
 		action: (error: InferError<This>) => any,
 	): OuterResult<InferValue<This>, InferError<This>>;
 	onFailure(action: (error: Err) => unknown): unknown {
-		const isAsync = isAsyncFn(action);
-
 		if (this.failure) {
 			const outcome = action(this._error);
-			if (isAsync) {
-				return new AsyncResult((resolve) => {
-					(outcome as AnyPromise).then(() =>
-						resolve(ResultFactory.error(this._error)),
-					);
+			if (isPromise(outcome)) {
+				return new AsyncResult((resolve, reject) => {
+					outcome
+						.then(() => resolve(ResultFactory.error(this._error as Defined)))
+						.catch(reject);
 				}) as any;
 			}
 
 			return this as any;
 		}
 
-		return (isAsync ? AsyncResult.ok(this._value) : this) as any;
+		return (isAsyncFn(action) ? AsyncResult.ok(this._value) : this) as any;
 	}
 
 	/**
@@ -1585,22 +1588,20 @@ export class Result<Value, Err> {
 		action: (value: InferValue<This>) => void,
 	): OuterResult<InferValue<This>, InferError<This>>;
 	onSuccess(action: (value: Value) => unknown): unknown {
-		const isAsync = isAsyncFn(action);
-
 		if (this.success) {
 			const outcome = action(this._value);
-			if (isAsync) {
-				return new AsyncResult((resolve) => {
-					(outcome as AnyPromise).then(() =>
-						resolve(ResultFactory.ok(this._value)),
-					);
+			if (isPromise(outcome)) {
+				return new AsyncResult((resolve, reject) => {
+					outcome
+						.then(() => resolve(ResultFactory.ok(this._value)))
+						.catch(reject);
 				});
 			}
 
 			return this;
 		}
 
-		return isAsync ? AsyncResult.error(this._error) : this;
+		return isAsyncFn(action) ? AsyncResult.error(this._error as Defined) : this;
 	}
 
 	/**
@@ -1896,7 +1897,7 @@ export class Result<Value, Err> {
 			return this;
 		}
 
-		return ResultFactory.error(transform(this._error));
+		return ResultFactory.error(transform(this._error) as Defined);
 	}
 
 	/**
@@ -2175,7 +2176,7 @@ export class ResultFactory {
 	static ok(): OuterResult.Ok<void>;
 	static ok<Value>(value: Value): OuterResult.Ok<Value>;
 	static ok(value?: unknown) {
-		return new Result(value, undefined);
+		return new Result(true, value, undefined);
 	}
 
 	/**
@@ -2190,9 +2191,9 @@ export class ResultFactory {
 	 * ```
 	 */
 	static error<const Err extends string>(error: Err): OuterResult.Error<Err>;
-	static error<Err>(error: Err): OuterResult.Error<Err>;
-	static error<Err>(error: Err) {
-		return new Result(undefined as never, error);
+	static error<Err extends {}>(error: Err): OuterResult.Error<Err>;
+	static error<Err extends {}>(error: Err) {
+		return new Result(false, undefined as never, error);
 	}
 
 	/**
@@ -2482,7 +2483,7 @@ export class ResultFactory {
 	): (...args: Parameters<Fn>) => OuterResult<ReturnType<Fn>, ErrorType>;
 	static wrap(
 		fn: AnyFunction | AnyAsyncFunction,
-		transformError?: (error: unknown) => AnyValue,
+		transformError?: (error: unknown) => Defined,
 	): AnyFunction {
 		return function wrapped(...args: any[]) {
 			return ResultFactory.try(() => fn(...args), transformError!);
@@ -2521,7 +2522,7 @@ export class ResultFactory {
 		AsyncResult<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>,
 		OuterResult<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>
 	>;
-	static try<R extends Generator | AsyncGenerator, ErrorType extends AnyValue>(
+	static try<R extends Generator | AsyncGenerator, ErrorType extends Defined>(
 		fn: () => R,
 		transform: (error: unknown) => ErrorType,
 	): IfGeneratorAsync<
@@ -2542,11 +2543,11 @@ export class ResultFactory {
 	static try<ReturnType>(
 		fn: () => ReturnType,
 	): OuterResult<ReturnType, NativeError>;
-	static try<ReturnType extends AnyPromise, ErrorType extends AnyValue>(
+	static try<ReturnType extends AnyPromise, ErrorType extends Defined>(
 		fn: () => ReturnType,
 		transform: (error: unknown) => ErrorType,
 	): AsyncResult<Awaited<ReturnType>, ErrorType>;
-	static try<ReturnType, ErrorType extends AnyValue>(
+	static try<ReturnType, ErrorType extends Defined>(
 		fn: () => ReturnType,
 		transform: (error: unknown) => ErrorType,
 	): OuterResult<ReturnType, ErrorType>;

@@ -1,13 +1,12 @@
 export { assertUnreachable } from "./helpers.js";
 
-import {
-	type AsyncResult,
-	type IfGeneratorAsync,
-	type InferGeneratorError,
-	type InferGeneratorReturn,
-	type Result as ResultBase,
-	ResultFactory,
-} from "./result.js";
+import type { AsyncResult, Result as ResultBase } from "./result.js";
+import { ResultFactory } from "./result-factory.js";
+import type {
+	IfGeneratorAsync,
+	InferGeneratorError,
+	InferGeneratorReturn,
+} from "./types.js";
 
 export { NonExhaustiveError } from "./matcher.js";
 export { AsyncResult } from "./result.js";

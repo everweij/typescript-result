@@ -9,142 +9,29 @@ import type {
 import {
 	isAsyncFn,
 	isAsyncGenerator,
-	isFunction,
 	isGenerator,
 	isPromise,
 } from "./helpers.js";
-import type { Result as OuterResult } from "./index.js";
 import { Matcher } from "./matcher.js";
+import type {
+	AnyAsyncResult,
+	AnyOuterResult,
+	AnyResult,
+	ErrorOr,
+	IfGeneratorAsync,
+	InferError,
+	InferGeneratorError,
+	InferGeneratorReturn,
+	InferValue,
+	OuterResult,
+	ValueOr,
+} from "./types.js";
 
-type InferError<T> =
-	T extends AsyncResult<any, infer Error>
-		? Error
-		: T extends Result<any, infer Error>
-			? Error
-			: never;
-type InferValue<T> =
-	T extends AsyncResult<infer V1, any>
-		? V1
-		: T extends Result<infer V2, any>
-			? V2
-			: T;
-
-type AnyResult = Result<any, any>;
-type AnyOuterResult = OuterResult<any, any>;
-type AnyAsyncResult = AsyncResult<any, any>;
-
-type ReturningValue<T> =
-	| Result<T, any>
-	| AsyncResult<T, any>
-	| Promise<ReturningValue<T>>
-	| T;
-
-type ReturningError<T> =
-	| Result<any, T>
-	| AsyncResult<any, T>
-	| Promise<ReturningError<T>>;
-
-type ExtractValue<T> = T extends ReturningValue<infer Value> ? Value : T;
-type ExtractError<T> = T extends ReturningError<infer Error> ? Error : never;
-
-type ExtractValues<T extends any[]> = {
-	[I in keyof T]: T[I] extends Generator | AsyncGenerator
-		? InferGeneratorReturn<T[I]>
-		: ExtractValue<T[I]>;
-};
-type ExtractErrors<T extends any[]> = {
-	[I in keyof T]: T[I] extends Generator | AsyncGenerator
-		? InferGeneratorError<T[I]>
-		: ExtractError<T[I]>;
-};
-
-type ValueOr<Value, Err, Or> = [Err] extends [never]
-	? [Value] extends [never]
-		? never
-		: Value
-	: Value | Or;
-
-type ErrorOr<Value, Err, Or> = [Value] extends [never]
-	? [Err] extends [never]
-		? never
-		: Err
-	: Err | Or;
-
-type SyncOrAsyncGenerator<Y, R, N> =
-	| Generator<Y, R, N>
-	| AsyncGenerator<Y, R, N>;
-
-type YieldedError<Y> = Y extends { error: infer E } ? E : never;
-type YieldedAsync<Y> = Y extends { async: infer A } ? A : false;
-
-type IsGeneratorParamsAsync<Y, RAsync> = [YieldedAsync<Y>] extends [false]
-	? [RAsync] extends [never]
-		? false
-		: true
-	: true;
-
-type IfGeneratorParamsAsync<Y, RAsync, Yes, No> =
-	IsGeneratorParamsAsync<Y, RAsync> extends true ? Yes : No;
-
-type GenSync<Y, V, E, RAsync> = Generator<
-	Y,
-	ReturningValue<V> | ReturningError<E> | AsyncResult<RAsync, any>
->;
-
-type GenAsync<Y, V, E> = AsyncGenerator<
-	Y,
-	ReturningValue<V> | ReturningError<E>
->;
-
-export type InferGeneratorReturn<T> =
-	T extends SyncOrAsyncGenerator<any, infer R, any> ? ExtractValue<R> : never;
-
-export type InferGeneratorError<T> = [T] extends [
-	SyncOrAsyncGenerator<never, infer R, any>,
-]
-	? InferError<R>
-	: T extends SyncOrAsyncGenerator<{ error: infer E }, infer R, any>
-		? E | InferError<R>
-		: never;
-
-type IsGeneratorAsync<T> =
-	T extends SyncOrAsyncGenerator<infer Info, infer R, any>
-		? Contains<Info, { async: true }> extends true
-			? true
-			: Contains<T, AsyncGenerator<any, any, any>> extends true
-				? true
-				: Contains<R, AnyAsyncResult> extends true
-					? true
-					: false
-		: false;
-
-export type IfGeneratorAsync<T, Yes, No> =
-	IsGeneratorAsync<T> extends true ? Yes : No;
-
-type UnwrapList<T extends any[]> = {
-	[I in keyof T]: T[I] extends AnyFunction<infer U> ? U : T[I];
-};
-
-type IsAsync<T> =
-	IsGeneratorAsync<T> extends true
-		? true
-		: T extends AnyPromise
-			? true
-			: T extends AnyFunction<infer U>
-				? IsAsync<U>
-				: never;
-
-type ListContainsAsync<T extends any[]> = {
-	[I in keyof T]: IsAsync<T[I]>;
-}[number] extends false
-	? false
-	: true;
-
-type AccountForThrowing<T extends any[]> = {
-	[I in keyof T]: T[I] extends AnyFunction | AnyPromise ? true : false;
-}[number] extends false
-	? never
-	: NativeError;
+export type {
+	IfGeneratorAsync,
+	InferGeneratorError,
+	InferGeneratorReturn,
+} from "./types.js";
 
 /**
  * Represents the asynchronous outcome of an operation that can either succeed or fail.
@@ -698,9 +585,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 				.catch((error: unknown) => {
 					try {
 						resolve(
-							ResultFactory.error(
-								transformError ? transformError(error) : error,
-							),
+							createError(transformError ? transformError(error) : error),
 						);
 					} catch (err) {
 						reject(err);
@@ -972,7 +857,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 */
 	static error<Error extends {}>(error: Error): AsyncResult<never, Error> {
 		return new AsyncResult((resolve) =>
-			resolve(ResultFactory.error(error) as OuterResult<never, Error>),
+			resolve(createError(error) as OuterResult<never, Error>),
 		);
 	}
 
@@ -981,7 +866,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	 */
 	static ok<Value>(value: Value): AsyncResult<Value, never> {
 		return new AsyncResult((resolve) =>
-			resolve(ResultFactory.ok(value) as OuterResult<Value, never>),
+			resolve(createOk(value) as OuterResult<Value, never>),
 		);
 	}
 
@@ -992,9 +877,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		return new AsyncResult((resolve, reject) => {
 			promise
 				.then((value) =>
-					resolve(
-						ResultFactory.isResult(value) ? value : ResultFactory.ok(value),
-					),
+					resolve(isResultInstance(value) ? value : createOk(value)),
 				)
 				.catch(reject);
 		});
@@ -1010,12 +893,10 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		return new AsyncResult((resolve, reject) => {
 			promise
 				.then((value) =>
-					resolve(
-						ResultFactory.isResult(value) ? value : ResultFactory.ok(value),
-					),
+					resolve(isResultInstance(value) ? value : createOk(value)),
 				)
 				.catch((caughtError) => {
-					resolve(ResultFactory.error(transform?.(caughtError) ?? caughtError));
+					resolve(createError(transform?.(caughtError) ?? caughtError));
 				})
 				.catch(reject);
 		});
@@ -1519,7 +1400,7 @@ export class Result<Value, Err> {
 			if (isPromise(outcome)) {
 				return new AsyncResult((resolve, reject) => {
 					outcome
-						.then(() => resolve(ResultFactory.error(this._error as Defined)))
+						.then(() => resolve(createError(this._error as Defined)))
 						.catch(reject);
 				}) as any;
 			}
@@ -1592,9 +1473,7 @@ export class Result<Value, Err> {
 			const outcome = action(this._value);
 			if (isPromise(outcome)) {
 				return new AsyncResult((resolve, reject) => {
-					outcome
-						.then(() => resolve(ResultFactory.ok(this._value)))
-						.catch(reject);
+					outcome.then(() => resolve(createOk(this._value))).catch(reject);
 				});
 			}
 
@@ -1736,7 +1615,7 @@ export class Result<Value, Err> {
 	): OuterResult<V, InferError<This>>;
 	map(this: AnyResult, transform: (value: any) => any) {
 		return this.success
-			? ResultFactory.run(() => transform(this._value))
+			? run(() => transform(this._value))
 			: isAsyncFn(transform)
 				? AsyncResult.error(this._error)
 				: this;
@@ -1857,7 +1736,7 @@ export class Result<Value, Err> {
 		transformError?: (err: unknown) => any,
 	): any {
 		return this.success
-			? ResultFactory.try(
+			? tryCatch(
 					() => transformValue(this._value),
 					transformError as AnyFunction,
 				)
@@ -1897,7 +1776,7 @@ export class Result<Value, Err> {
 			return this;
 		}
 
-		return ResultFactory.error(transform(this._error) as Defined);
+		return createError(transform(this._error) as Defined);
 	}
 
 	/**
@@ -1992,7 +1871,7 @@ export class Result<Value, Err> {
 			? isAsyncFn(onFailure)
 				? AsyncResult.ok(this._value)
 				: this
-			: ResultFactory.run(() => onFailure(this._error));
+			: run(() => onFailure(this._error));
 	}
 
 	/**
@@ -2116,10 +1995,7 @@ export class Result<Value, Err> {
 			? isAsyncFn(onFailure)
 				? AsyncResult.ok(this._value)
 				: this
-			: ResultFactory.try(
-					() => onFailure(this._error),
-					transformError as AnyFunction,
-				);
+			: tryCatch(() => onFailure(this._error), transformError as AnyFunction);
 	}
 
 	/**
@@ -2145,840 +2021,126 @@ export class Result<Value, Err> {
 }
 
 /**
- * Static factory and utility methods for working with {@linkcode Result} and {@linkcode AsyncResult}.
- *
- * This class is re-exported as the `Result` namespace, so all methods are available as `Result.ok()`,
- * `Result.error()`, `Result.try()`, `Result.gen()`, `Result.all()`, `Result.wrap()`, etc.
- *
- * Key methods:
- * - {@linkcode ResultFactory.ok | Result.ok} / {@linkcode ResultFactory.error | Result.error} — create result instances
- * - {@linkcode ResultFactory.try | Result.try} — execute a function and catch exceptions
- * - {@linkcode ResultFactory.gen | Result.gen} — run a generator function with `yield*` short-circuiting
- * - {@linkcode ResultFactory.all | Result.all} — combine multiple operations (like `Promise.all`)
- * - {@linkcode ResultFactory.wrap | Result.wrap} — wrap an existing function to return a result
- * - {@linkcode ResultFactory.fromAsync | Result.fromAsync} — lift a Promise into an AsyncResult
+ * @internal
  */
-export class ResultFactory {
-	/* c8 ignore next */
-	private constructor() {}
+export function createOk(value?: unknown) {
+	return new Result(true, value, undefined);
+}
 
-	/**
-	 * Creates a new result instance that represents a successful outcome.
-	 *
-	 * @param value The value to encapsulate in the result.
-	 * @returns a new {@linkcode Result} instance.
-	 *
-	 * @example
-	 * ```ts
-	 * const result = Result.ok(42); // Result.Ok<number>
-	 * ```
-	 */
-	static ok(): OuterResult.Ok<void>;
-	static ok<Value>(value: Value): OuterResult.Ok<Value>;
-	static ok(value?: unknown) {
-		return new Result(true, value, undefined);
+/**
+ * @internal
+ */
+export function createError<Err extends {}>(error: Err) {
+	return new Result(false, undefined as never, error);
+}
+
+/**
+ * @internal
+ */
+export function isResultInstance(
+	possibleResult: unknown,
+): possibleResult is AnyOuterResult {
+	return possibleResult instanceof Result;
+}
+
+/**
+ * @internal
+ */
+export function isAsyncResultInstance(
+	possibleAsyncResult: unknown,
+): possibleAsyncResult is AnyAsyncResult {
+	return possibleAsyncResult instanceof AsyncResult;
+}
+
+/**
+ * @internal
+ */
+export function run(fn: AnyFunction): AnyResult | AnyAsyncResult {
+	const returnValue = fn();
+
+	if (isGenerator(returnValue) || isAsyncGenerator(returnValue)) {
+		return handleGenerator(returnValue);
 	}
 
-	/**
-	 * Creates a new result instance that represents a failed outcome.
-	 *
-	 * @param error The error to encapsulate in the result.
-	 * @returns a new {@linkcode Result} instance.
-	 *
-	 * @example
-	 * ```ts
-	 * const result = Result.error(new NotFoundError()); // Result.Error<NotFoundError>
-	 * ```
-	 */
-	static error<const Err extends string>(error: Err): OuterResult.Error<Err>;
-	static error<Err extends {}>(error: Err): OuterResult.Error<Err>;
-	static error<Err extends {}>(error: Err) {
-		return new Result(false, undefined as never, error);
+	if (isPromise(returnValue)) {
+		return AsyncResult.fromPromise(returnValue);
 	}
 
-	/**
-	 * Type guard that checks whether the provided value is a {@linkcode Result} instance.
-	 *
-	 * @param possibleResult any value that might be a {@linkcode Result} instance.
-	 * @returns true if the provided value is a {@linkcode Result} instance, otherwise false.
-	 */
-	static isResult(possibleResult: unknown): possibleResult is AnyOuterResult {
-		return possibleResult instanceof Result;
-	}
+	return isResultInstance(returnValue) ? returnValue : createOk(returnValue);
+}
 
-	/**
-	 * Type guard that checks whether the provided value is a {@linkcode AsyncResult} instance.
-	 *
-	 * @param possibleAsyncResult any value that might be a {@linkcode AsyncResult} instance.
-	 * @returns true if the provided value is a {@linkcode AsyncResult} instance, otherwise false.
-	 */
-	static isAsyncResult(
-		possibleAsyncResult: unknown,
-	): possibleAsyncResult is AnyAsyncResult {
-		return possibleAsyncResult instanceof AsyncResult;
-	}
-
-	/**
-	 * @internal
-	 */
-	static run(fn: AnyFunction): AnyResult | AnyAsyncResult {
+/**
+ * @internal
+ */
+export function tryCatch(
+	fn: AnyFunction | AnyAsyncFunction,
+	transform?: (error: unknown) => any,
+) {
+	try {
 		const returnValue = fn();
 
-		if (isGenerator(returnValue) || isAsyncGenerator(returnValue)) {
-			return ResultFactory.handleGenerator(returnValue);
+		if (isGenerator(returnValue)) {
+			return handleGenerator(returnValue);
+		}
+
+		if (isAsyncGenerator(returnValue)) {
+			const asyncResult = handleGenerator(returnValue) as AnyAsyncResult;
+			return AsyncResult.fromPromiseCatching(asyncResult, transform);
 		}
 
 		if (isPromise(returnValue)) {
-			return AsyncResult.fromPromise(returnValue);
+			return AsyncResult.fromPromiseCatching(returnValue, transform);
 		}
 
-		return ResultFactory.isResult(returnValue)
-			? returnValue
-			: ResultFactory.ok(returnValue);
+		return isResultInstance(returnValue) ? returnValue : createOk(returnValue);
+	} catch (caughtError: unknown) {
+		return createError(transform?.(caughtError) ?? caughtError);
 	}
+}
 
-	/**
-	 * @internal
-	 */
-	static allInternal(
-		items: any[],
-		opts: { catching: boolean },
-	): AnyResult | AnyAsyncResult {
-		const runner = opts.catching ? ResultFactory.try : ResultFactory.run;
-
-		const flattened: Array<AnyResult | AnyAsyncResult> = [];
-
-		let isAsync = items.some(isPromise);
-		let hasFailure = false;
-
-		for (const item of items) {
-			if (isFunction(item)) {
-				if (hasFailure) {
-					continue;
-				}
-
-				const returnValue = runner(item as AnyFunction);
-
-				if (ResultFactory.isResult(returnValue) && !returnValue.ok) {
-					hasFailure = true;
-					if (!isAsync) {
-						return returnValue;
-					}
-				}
-
-				if (ResultFactory.isAsyncResult(returnValue)) {
-					isAsync = true;
-				}
-
-				flattened.push(returnValue);
-			} else if (ResultFactory.isResult(item)) {
-				if (!item.ok) {
-					hasFailure = true;
-					if (!isAsync) {
-						return item;
-					}
-				}
-
-				flattened.push(item);
-			} else if (ResultFactory.isAsyncResult(item)) {
-				isAsync = true;
-				flattened.push(item);
-			} else if (isPromise(item)) {
-				isAsync = true;
-
-				flattened.push(
-					opts.catching
-						? AsyncResult.fromPromiseCatching(item)
-						: AsyncResult.fromPromise(item),
-				);
-			} else {
-				flattened.push(ResultFactory.ok(item));
-			}
-		}
-
-		if (isAsync) {
-			return new AsyncResult((resolve, reject) => {
-				const asyncResults: AnyAsyncResult[] = [];
-				const asyncIndexes: number[] = [];
-
-				for (let i = 0; i < flattened.length; i++) {
-					const item = flattened[i];
-					if (ResultFactory.isAsyncResult(item)) {
-						asyncResults.push(item);
-						asyncIndexes.push(i);
-					}
-				}
-
-				Promise.all(asyncResults)
-					.then((resolvedResults) => {
-						const merged = [...flattened] as AnyResult[];
-						for (let i = 0; i < resolvedResults.length; i++) {
-							merged[asyncIndexes[i]!] = resolvedResults[i]!;
-						}
-
-						const firstFailedResult = merged.find(
-							(resolvedResult) => !resolvedResult.ok,
-						);
-						if (firstFailedResult) {
-							resolve(firstFailedResult);
-							return;
-						}
-
-						resolve(
-							ResultFactory.ok(merged.map((result) => result.getOrNull())),
-						);
-					})
-					.catch((reason) => {
-						// note: this should only happen when opts.catching is false
-						reject(reason);
-					});
-			});
-		}
-
-		return ResultFactory.ok(
-			(flattened as AnyResult[]).map((result) => result.getOrNull()),
-		);
-	}
-
-	/**
-	 * Similar to {@linkcode Promise.all}, but for results.
-	 * Useful when you want to run multiple independent operations and bundle the outcome into a single result.
-	 * All possible values of the individual operations are collected into an array. `Result.all` will fail eagerly,
-	 * meaning that as soon as any of the operations fail, the entire result will be a failure.
-	 * Each argument can be a mixture of literal values, functions, {@linkcode Result} or {@linkcode AsyncResult} instances, or {@linkcode Promise}.
-	 *
-	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, {@linkcode Promise}, or (async) generator function.
-	 * @returns combined result of all the operations.
-	 *
-	 * > [!NOTE]
-	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
-	 * > to handle these exceptions. Please refer to {@linkcode Result.allCatching} for a version that catches exceptions
-	 * > and encapsulates them in a failed result.
-	 *
-	 * @example Combining multiple results
-	 * ```ts
-	 * declare function createTask(name: string): Result<Task, IOError>;
-	 *
-	 * const tasks = ["task-a", "task-b", "task-c"];
-	 * const result = Result.all(...tasks.map(createTask)); // Result<Task[], IOError>
-	 * ```
-	 *
-	 * @example Mixing different input types
-	 * ```ts
-	 * const result = Result.all(
-	 *   "a",
-	 *   Promise.resolve("b"),
-	 *   Result.ok("c"),
-	 *   Result.try(async () => "d"),
-	 *   () => "e",
-	 *   () => Result.try(async () => "f"),
-	 *   () => Result.ok("g"),
-	 *   async () => "h",
-	 *   function* () {
-	 *     return "i";
-	 *   }
-	 * ); // AsyncResult<[string, string, string, string, string, string, string, string, string], Error>
-	 * ```
-	 */
-	static all<Items extends any[], Unwrapped extends any[] = UnwrapList<Items>>(
-		...items: Items
-	) {
-		return ResultFactory.allInternal(items, {
-			catching: false,
-		}) as ListContainsAsync<Items> extends true
-			? AsyncResult<ExtractValues<Unwrapped>, ExtractErrors<Unwrapped>[number]>
-			: OuterResult<ExtractValues<Unwrapped>, ExtractErrors<Unwrapped>[number]>;
-	}
-
-	/**
-	 * Similar to {@linkcode Result.all}, but catches any exceptions that might be thrown during the operations
-	 * and encapsulates them in a failed result. The error type of thrown exceptions defaults to `Error` unless
-	 * a `transformError` is provided at the call-site level (e.g. via wrapped functions).
-	 *
-	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}
-	 * @returns combined result of all the operations
-	 *
-	 * @example Catching a thrown exception
-	 * ```ts
-	 * const result = Result.allCatching(
-	 *   () => { throw new Error("boom"); },
-	 *   Result.ok(42),
-	 * ); // Result<[never, number], Error>
-	 *
-	 * if (!result.ok) {
-	 *   result.error; // Error
-	 * }
-	 * ```
-	 *
-	 * @example Catching an async rejection
-	 * ```ts
-	 * const result = Result.allCatching(
-	 *   Promise.reject(new Error("network failure")),
-	 *   Result.ok("cached"),
-	 * ); // AsyncResult<[never, string], Error>
-	 * ```
-	 */
-	static allCatching<
-		Items extends any[],
-		Unwrapped extends any[] = UnwrapList<Items>,
-	>(...items: Items) {
-		return ResultFactory.allInternal(items, {
-			catching: true,
-		}) as ListContainsAsync<Items> extends true
-			? AsyncResult<
-					ExtractValues<Unwrapped>,
-					ExtractErrors<Unwrapped>[number] | AccountForThrowing<Items>
-				>
-			: OuterResult<
-					ExtractValues<Unwrapped>,
-					ExtractErrors<Unwrapped>[number] | AccountForThrowing<Items>
-				>;
-	}
-
-	/**
-	 * Wraps a function and returns a new function that returns a result. Especially useful when you want to work with
-	 * external functions that might throw exceptions.
-	 * The returned function will catch any exceptions that might be thrown and encapsulate them in a failed result.
-	 *
-	 * @param fn function to wrap. Can be synchronous or asynchronous
-	 * @param transformError optional callback to transform the caught error into a more meaningful error
-	 * @returns a new function that returns a result
-	 *
-	 * @example Wrapping a synchronous function
-	 * ```ts
-	 * declare function divide(a: number, b: number): number;
-	 *
-	 * const safeDivide = Result.wrap(divide);
-	 * const result = safeDivide(10, 0); // Result<number, Error>
-	 * ```
-	 *
-	 * @example Wrapping an async function
-	 * ```ts
-	 * declare function fetchUser(id: string): Promise<User>;
-	 *
-	 * const safeFetchUser = Result.wrap(fetchUser);
-	 * const result = safeFetchUser("123"); // AsyncResult<User, Error>
-	 * ```
-	 *
-	 * @example Using transformError
-	 * ```ts
-	 * declare function parseConfig(raw: string): Config;
-	 *
-	 * const safeParseConfig = Result.wrap(
-	 *   parseConfig,
-	 *   (error) => new ConfigError("Invalid config", { cause: error }),
-	 * );
-	 * const result = safeParseConfig("{}"); // Result<Config, ConfigError>
-	 * ```
-	 */
-	static wrap<Fn extends AnyAsyncFunction, ErrorType = NativeError>(
-		fn: Fn,
-		transformError?: (error: unknown) => ErrorType,
-	): (
-		...args: Parameters<Fn>
-	) => AsyncResult<Awaited<ReturnType<Fn>>, ErrorType>;
-	static wrap<Fn extends AnyFunction, ErrorType = NativeError>(
-		fn: Fn,
-		transformError?: (error: unknown) => ErrorType,
-	): (...args: Parameters<Fn>) => OuterResult<ReturnType<Fn>, ErrorType>;
-	static wrap(
-		fn: AnyFunction | AnyAsyncFunction,
-		transformError?: (error: unknown) => Defined,
-	): AnyFunction {
-		return function wrapped(...args: any[]) {
-			return ResultFactory.try(() => fn(...args), transformError!);
-		};
-	}
-
-	/**
-	 * Executes the given {@linkcode fn} function and encapsulates the returned value as a successful result, or the
-	 * thrown exception as a failed result. In a way, you can view this method as a try-catch block that returns a result.
-	 *
-	 * @param fn function with code to execute. Can be synchronous or asynchronous.
-	 * @param transform optional callback to transform the caught error into a more meaningful error.
-	 * @returns a new {@linkcode Result} instance.
-	 *
-	 * @example Wrapping a throwing function
-	 * ```ts
-	 * declare function saveFileToDisk(filename: string): void; // might throw an error
-	 *
-	 * const result = Result.try(() => saveFileToDisk("file.txt")); // Result<void, Error>
-	 * ```
-	 *
-	 * @example Transforming the caught error
-	 * ```ts
-	 * declare function saveFileToDisk(filename: string): void; // might throw an error
-	 *
-	 * const result = Result.try(
-	 *   () => saveFileToDisk("file.txt"),
-	 *   (error) => new IOError("Failed to save file", { cause: error })
-	 * ); // Result<void, IOError>
-	 * ```
-	 */
-	static try<R extends Generator | AsyncGenerator>(
-		fn: () => R,
-	): IfGeneratorAsync<
-		R,
-		AsyncResult<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>,
-		OuterResult<InferGeneratorReturn<R>, InferGeneratorError<R> | NativeError>
-	>;
-	static try<R extends Generator | AsyncGenerator, ErrorType extends Defined>(
-		fn: () => R,
-		transform: (error: unknown) => ErrorType,
-	): IfGeneratorAsync<
-		R,
-		AsyncResult<InferGeneratorReturn<R>, InferGeneratorError<R> | ErrorType>,
-		OuterResult<InferGeneratorReturn<R>, InferGeneratorError<R> | ErrorType>
-	>;
-	static try<
-		Fn extends AnyAsyncFunction<AnyResult>,
-		R = Awaited<ReturnType<Fn>>,
-	>(fn: Fn): AsyncResult<InferValue<R>, InferError<R> | NativeError>;
-	static try<Fn extends AnyFunction<AnyResult>, R = ReturnType<Fn>>(
-		fn: Fn,
-	): OuterResult<InferValue<R>, InferError<R> | NativeError>;
-	static try<ReturnType extends AnyPromise>(
-		fn: () => ReturnType,
-	): AsyncResult<Awaited<ReturnType>, NativeError>;
-	static try<ReturnType>(
-		fn: () => ReturnType,
-	): OuterResult<ReturnType, NativeError>;
-	static try<ReturnType extends AnyPromise, ErrorType extends Defined>(
-		fn: () => ReturnType,
-		transform: (error: unknown) => ErrorType,
-	): AsyncResult<Awaited<ReturnType>, ErrorType>;
-	static try<ReturnType, ErrorType extends Defined>(
-		fn: () => ReturnType,
-		transform: (error: unknown) => ErrorType,
-	): OuterResult<ReturnType, ErrorType>;
-	static try(
-		fn: AnyFunction | AnyAsyncFunction,
-		transform?: (error: unknown) => any,
-	) {
-		try {
-			const returnValue = fn();
-
-			if (isGenerator(returnValue)) {
-				return ResultFactory.handleGenerator(returnValue);
-			}
-
-			if (isAsyncGenerator(returnValue)) {
-				const asyncResult = ResultFactory.handleGenerator(
-					returnValue,
-				) as AnyAsyncResult;
-				return AsyncResult.fromPromiseCatching(asyncResult, transform);
-			}
-
-			if (isPromise(returnValue)) {
-				return AsyncResult.fromPromiseCatching(returnValue, transform);
-			}
-
-			return ResultFactory.isResult(returnValue)
-				? returnValue
-				: ResultFactory.ok(returnValue);
-		} catch (caughtError: unknown) {
-			return ResultFactory.error(transform?.(caughtError) ?? caughtError);
-		}
-	}
-
-	/**
-	 * Utility method to transform an async function to an {@linkcode AsyncResult} instance. Useful when you want to
-	 * immediately chain operations after calling an async function/method that returns a Result.
-	 *
-	 * @param fn the async callback function that returns a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance.
-	 *
-	 * @returns a new {@linkcode AsyncResult} instance.
-	 *
-	 * > [!NOTE]
-	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
-	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
-	 * > and encapsulates them in a failed result.
-	 *
-	 * @example Wrapping an async callback
-	 *
-	 * ```ts
-	 * function findUserById(id: string) {
-	 *   return Result.fromAsync(async () => {
-	 *     const user = await db.query("SELECT * FROM users WHERE id = ?", [id]);
-	 *
-	 *     if (!user) {
-	 *       return Result.error(new NotFoundError("User not found"));
-	 *     }
-	 *
-	 *     return Result.ok(user);
-	 *   });
-	 * }
-	 *
-	 * const displayName = await findUserById("123").fold((user) => user.name, () => "Unknown User");
-	 * ```
-	 */
-	static fromAsync<T>(
-		fn: () => Promise<T>,
-	): AsyncResult<ExtractValue<T>, ExtractError<T>>;
-	/**
-	 * Utility method to transform a Promise, that holds a literal value or
-	 * a {@linkcode Result} or {@linkcode AsyncResult} instance, into an {@linkcode AsyncResult} instance. Useful when you want to immediately chain operations
-	 * after calling an async function.
-	 *
-	 * @param value a Promise that holds a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance.
-	 *
-	 * @returns a new {@linkcode AsyncResult} instance.
-	 *
-	 * > [!NOTE]
-	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
-	 * > to handle these exceptions. Please refer to {@linkcode Result.fromAsyncCatching} for a version that catches exceptions
-	 * > and encapsulates them in a failed result.
-	 *
-	 * @example Lifting a Promise into an AsyncResult
-	 *
-	 * ```ts
-	 * declare function someAsyncOperation(): Promise<Result<number, Error>>;
-	 *
-	 * // without 'Result.fromAsync'
-	 * const result = (await someAsyncOperation()).map((value) => value * 2); // Result<number, Error>
-	 *
-	 * // with 'Result.fromAsync'
-	 * const asyncResult = Result.fromAsync(someAsyncOperation()).map((value) => value * 2); // AsyncResult<number, Error>
-	 * ```
-	 */
-	static fromAsync<T>(
-		value: Promise<T>,
-	): AsyncResult<ExtractValue<T>, ExtractError<T>>;
-	static fromAsync(valueOrFn: AnyPromise | AnyAsyncFunction) {
-		return ResultFactory.run(
-			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
-		);
-	}
-
-	/**
-	 * Similar to {@linkcode Result.fromAsync}, but catches any exceptions that might be thrown during the async
-	 * operation and encapsulates them in a failed result.
-	 *
-	 * @param fn async callback function that returns a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance
-	 * @param transformError optional callback to transform the caught error into a more meaningful error
-	 * @returns a new {@linkcode AsyncResult} instance
-	 *
-	 * @example Catching a thrown exception
-	 * ```ts
-	 * const result = Result.fromAsyncCatching(async () => {
-	 *   const response = await fetch("https://example.com/api");
-	 *   return response.json();
-	 * }); // AsyncResult<any, Error>
-	 * ```
-	 *
-	 * @example Using transformError
-	 * ```ts
-	 * const result = Result.fromAsyncCatching(
-	 *   async () => {
-	 *     const response = await fetch("https://example.com/api");
-	 *     return response.json();
-	 *   },
-	 *   (error) => new FetchError("API request failed", { cause: error }),
-	 * ); // AsyncResult<any, FetchError>
-	 * ```
-	 */
-	static fromAsyncCatching<T, ErrorType = NativeError>(
-		fn: () => Promise<T>,
-		transformError?: (err: unknown) => ErrorType,
-	): AsyncResult<ExtractValue<T>, ExtractError<T> | ErrorType>;
-	/**
-	 * Similar to {@linkcode Result.fromAsync}, but catches any exceptions that might be thrown during the async
-	 * operation and encapsulates them in a failed result.
-	 *
-	 * @param value a Promise that holds a literal value or a {@linkcode Result} or {@linkcode AsyncResult} instance
-	 * @param transformError optional callback to transform the caught error into a more meaningful error
-	 * @returns a new {@linkcode AsyncResult} instance
-	 */
-	static fromAsyncCatching<T, ErrorType = NativeError>(
-		value: Promise<T>,
-		transformError?: (err: unknown) => ErrorType,
-	): AsyncResult<ExtractValue<T>, ExtractError<T> | ErrorType>;
-	static fromAsyncCatching(
-		valueOrFn: AnyPromise | AnyAsyncFunction,
-		transformError?: (err: unknown) => any,
-	) {
-		return ResultFactory.try(
-			typeof valueOrFn === "function" ? valueOrFn : () => valueOrFn,
-			transformError as AnyFunction,
-		);
-	}
-
-	private static handleGenerator(it: Generator | AsyncGenerator) {
-		function handleResult(result: AnyResult) {
-			if (!result.ok) {
-				return iterate(it.return(result));
-			}
-
-			return iterate(it.next(result.value));
-		}
-
-		function handleStep(
-			step: IteratorResult<unknown>,
-		): AnyResult | Promise<AnyResult> {
-			if (step.done) {
-				if (step.value instanceof Result || step.value instanceof AsyncResult) {
-					return step.value;
-				}
-
-				return ResultFactory.ok(step.value);
-			}
-
-			if (step.value instanceof Result) {
-				return handleResult(step.value);
-			}
-
-			if (step.value instanceof AsyncResult) {
-				return step.value.then(handleResult);
-			}
-
-			return iterate(it.next(step.value)); // unlikely to happen, but just in case
-		}
-
-		function iterate(
-			iteratorResult:
-				| IteratorResult<unknown>
-				| Promise<IteratorResult<unknown>>,
-		) {
-			return isPromise(iteratorResult)
-				? iteratorResult.then(handleStep)
-				: handleStep(iteratorResult);
-		}
-
-		const result = iterate(it.next())!;
-
-		return isPromise(result) ? AsyncResult.fromPromise(result) : result;
-	}
-
-	/**
-	 * Executes the given {@linkcode fn} (async) generator function and encapsulates the returned value or error as a Result.
-	 * This method is often used once as entry point to run a specific flow. The reason for this is that nested generator functions or calls to other functions that return results are supported.
-	 *
-	 * @param self optional `this` context to bind the generator function to.
-	 * @param fn generator function with code to execute. Can be synchronous or asynchronous.
-	 * @returns a new {@linkcode Result} or {@linkcode AsyncResult} instance depending on the provided callback fn.
-	 *
-	 * @example Running an async generator pipeline
-	 * ```ts
-	 * const result = Result.gen(async function* () {
-	 *    const order = yield* getOrderById("123"); // AsyncResult<Order, NotFoundError>
-	 *    yield* order.ship(); // Result<void, InvalidOrderStatusError>;
-	 *    const arrivalDate = await shipmentService.calculateArrivalDate(order);
-	 *    return `Your order has been shipped and is expected to arrive on ${arrivalDate}!`;
-	 * }); // AsyncResult<string, NotFoundError | InvalidOrderStatusError>;
-	 * ```
-	 *
-	 * @example Binding a `this` context
-	 * ```ts
-	 * class MyClass {
-	 *   someValue = 12;
-	 *
-	 *   someMethod() {
-	 *     return Result.gen(this, function* () {
-	 *       const otherValue = yield* Result.ok(8);
-	 *       return `The sum is ${this.someValue + otherValue}`;
-	 *     });
-	 *   }
-	 * }
-	 * ```
-	 */
-	// Sync generator function with possible async yields/returns
-	static gen<Y, V, E = never, RAsync = never>(
-		fn: () => GenSync<Y, V, E, RAsync>,
-	): IfGeneratorParamsAsync<
-		Y,
-		RAsync,
-		AsyncResult<V, YieldedError<Y> | E>,
-		OuterResult<V, YieldedError<Y> | E>
-	>;
-
-	// Async generator function
-	static gen<Y, V, E = never>(
-		fn: () => GenAsync<Y, V, E>,
-	): AsyncResult<V, YieldedError<Y> | E>;
-
-	// Sync generator function with this context and possible async yields/returns
-	static gen<This, Y, V, E = never, RAsync = never>(
-		self: This,
-		fn: (this: This) => GenSync<Y, V, E, RAsync>,
-	): IfGeneratorParamsAsync<
-		Y,
-		RAsync,
-		AsyncResult<V, YieldedError<Y> | E>,
-		OuterResult<V, YieldedError<Y> | E>
-	>;
-
-	// Async generator function with this context
-	static gen<This, Y, V, E = never>(
-		self: This,
-		fn: (this: This) => GenAsync<Y, V, E>,
-	): AsyncResult<V, YieldedError<Y> | E>;
-
-	// Direct sync generator
-	static gen<Y, V, E = never, RAsync = never>(
-		generator: GenSync<Y, V, E, RAsync>,
-	): IfGeneratorParamsAsync<
-		Y,
-		RAsync,
-		AsyncResult<V, YieldedError<Y> | E>,
-		OuterResult<V, YieldedError<Y> | E>
-	>;
-
-	// Direct async generator
-	static gen<Y, V, E = never>(
-		generator: GenAsync<Y, V, E>,
-	): AsyncResult<V, YieldedError<Y> | E>;
-
-	static gen<T extends Generator | AsyncGenerator>(
-		generatorOrSelfOrFn: unknown,
-		fn?: () => T,
-	) {
-		const it =
-			isGenerator(generatorOrSelfOrFn) || isAsyncGenerator(generatorOrSelfOrFn)
-				? generatorOrSelfOrFn
-				: typeof generatorOrSelfOrFn === "function"
-					? generatorOrSelfOrFn()
-					: fn?.apply(generatorOrSelfOrFn);
-		return ResultFactory.handleGenerator(it);
-	}
-
-	/**
-	 * Similar to {@linkcode Result.gen}, but catches any exceptions that might be thrown during any operation
-	 * and encapsulates them in a failed result. Returns a {@linkcode Result} or {@linkcode AsyncResult} depending
-	 * on whether the generator function contains async operations or not.
-	 *
-	 * @param generator a generator, generator function, or a `this` context followed by a generator function
-	 * @param transformError optional callback to transform the caught error into a more meaningful error
-	 * @returns a new {@linkcode Result} or {@linkcode AsyncResult} instance
-	 *
-	 * @example Catching a thrown exception inside a generator
-	 * ```ts
-	 * const result = Result.genCatching(function* () {
-	 *   const value = yield* Result.ok(42);
-	 *   if (value > 40) throw new Error("too large");
-	 *   return value;
-	 * }); // Result<number, Error>
-	 * ```
-	 *
-	 * @example Using transformError to provide domain errors
-	 * ```ts
-	 * const result = Result.genCatching(
-	 *   function* () {
-	 *     const user = yield* findUserById("123"); // Result<User, NotFoundError>
-	 *     const data = JSON.parse(user.rawData); // might throw SyntaxError
-	 *     return data;
-	 *   },
-	 *   (error) => new ParseError("Failed to parse user data", { cause: error }),
-	 * ); // Result<any, NotFoundError | ParseError>
-	 * ```
-	 */
-	static genCatching<
-		T extends Generator | AsyncGenerator,
-		ErrorType = NativeError,
-	>(
-		generator: T,
-		transformError?: (error: unknown) => ErrorType,
-	): IfGeneratorAsync<
-		T,
-		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
-		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
-	>;
-	static genCatching<
-		T extends Generator | AsyncGenerator,
-		ErrorType = NativeError,
-	>(
-		fn: () => T,
-		transformError?: (error: unknown) => ErrorType,
-	): IfGeneratorAsync<
-		T,
-		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
-		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
-	>;
-	static genCatching<
-		T extends Generator | AsyncGenerator,
-		This,
-		ErrorType = NativeError,
-	>(
-		self: This,
-		fn: (this: This) => T,
-		transformError?: (error: unknown) => ErrorType,
-	): IfGeneratorAsync<
-		T,
-		AsyncResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>,
-		OuterResult<InferGeneratorReturn<T>, InferGeneratorError<T> | ErrorType>
-	>;
-	static genCatching(
-		generatorOrSelfOrFn: unknown,
-		transformValueOrError?: Function,
-		transformError?: Function,
-	) {
-		const isGen =
-			isGenerator(generatorOrSelfOrFn) || isAsyncGenerator(generatorOrSelfOrFn);
-
-		const self =
-			typeof generatorOrSelfOrFn === "function" || isGen
-				? undefined
-				: generatorOrSelfOrFn;
-		const tValue =
-			typeof generatorOrSelfOrFn === "function"
-				? generatorOrSelfOrFn
-				: transformValueOrError!;
-		const tError =
-			typeof generatorOrSelfOrFn === "function" || isGen
-				? transformValueOrError
-				: transformError;
-
-		try {
-			const it = isGen
-				? generatorOrSelfOrFn
-				: self
-					? tValue.apply(generatorOrSelfOrFn)
-					: tValue();
-			const result = ResultFactory.handleGenerator(it);
-
-			if (ResultFactory.isAsyncResult(result)) {
-				return result.catch((error) =>
-					AsyncResult.error(tError?.(error) ?? error),
-				) as any;
-			}
-
-			return result as any;
-		} catch (error: unknown) {
-			return ResultFactory.error(tError?.(error) ?? error) as any;
-		}
-	}
-
-	/**
-	 * Asserts that the provided result is successful. If the result is a failure, an error is thrown.
-	 * Useful in unit tests.
-	 *
-	 * @param result the result instance to assert against.
-	 */
-	static assertOk<Value>(
-		result: OuterResult<Value, any>,
-	): asserts result is OuterResult.Ok<Value> {
+/**
+ * @internal
+ */
+export function handleGenerator(it: Generator | AsyncGenerator) {
+	function handleResult(result: AnyResult) {
 		if (!result.ok) {
-			throw new Error("Expected a successful result, but got an error instead");
+			return iterate(it.return(result));
 		}
+
+		return iterate(it.next(result.value));
 	}
 
-	/**
-	 * Asserts that the provided result is a failure. If the result is successful, an error is thrown.
-	 * Useful in unit tests.
-	 *
-	 * @param result the result instance to assert against.
-	 */
-	static assertError<Err>(
-		result: OuterResult<any, Err>,
-	): asserts result is OuterResult.Error<Err> {
-		if (result.ok) {
-			throw new Error("Expected a failed result, but got a value instead");
+	function handleStep(
+		step: IteratorResult<unknown>,
+	): AnyResult | Promise<AnyResult> {
+		if (step.done) {
+			if (step.value instanceof Result || step.value instanceof AsyncResult) {
+				return step.value;
+			}
+
+			return createOk(step.value);
 		}
+
+		if (step.value instanceof Result) {
+			return handleResult(step.value);
+		}
+
+		if (step.value instanceof AsyncResult) {
+			return step.value.then(handleResult);
+		}
+
+		return iterate(it.next(step.value)); // unlikely to happen, but just in case
 	}
 
-	/**
-	 * @internal
-	 */
-	static [Symbol.hasInstance](instance: unknown): boolean {
-		return instance instanceof Result;
+	function iterate(
+		iteratorResult: IteratorResult<unknown> | Promise<IteratorResult<unknown>>,
+	) {
+		return isPromise(iteratorResult)
+			? iteratorResult.then(handleStep)
+			: handleStep(iteratorResult);
 	}
+
+	const result = iterate(it.next())!;
+
+	return isPromise(result) ? AsyncResult.fromPromise(result) : result;
 }

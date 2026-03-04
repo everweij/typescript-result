@@ -2935,7 +2935,7 @@ describe("Result", () => {
 		const asyncFailure = AsyncResult.error(new ErrorA());
 
 		const resultA = syncFailure.map((value) => {
-			expectTypeOf(value).toEqualTypeOf<any>();
+			expectTypeOf(value).toEqualTypeOf<never>();
 			return Result.ok(12);
 		});
 		expectTypeOf(resultA).toEqualTypeOf<Result.Error<ErrorA>>();
@@ -2948,13 +2948,13 @@ describe("Result", () => {
 		expectTypeOf(resultC).toEqualTypeOf<Result.Error<ErrorA>>();
 
 		const resultD = asyncFailure.map((value) => {
-			expectTypeOf(value).toEqualTypeOf<any>();
+			expectTypeOf(value).toEqualTypeOf<never>();
 			return Result.ok(12);
 		});
 		expectTypeOf(resultD).toEqualTypeOf<AsyncResult<never, ErrorA>>();
 
 		const resultE = asyncFailure.mapCatching((value) => {
-			expectTypeOf(value).toEqualTypeOf<any>();
+			expectTypeOf(value).toEqualTypeOf<never>();
 			return Result.ok(12);
 		});
 		expectTypeOf(resultE).toEqualTypeOf<AsyncResult<never, ErrorA>>();
@@ -2967,7 +2967,10 @@ describe("Result", () => {
 		const resultA = syncSuccess.recover(() => Result.error(new ErrorA()));
 		expectTypeOf(resultA).toEqualTypeOf<Result.Ok<number>>();
 
-		const resultB = syncSuccess.recover(async () => Result.error(new ErrorA()));
+		const resultB = syncSuccess.recover(async (err) => {
+			expectTypeOf(err).toEqualTypeOf<never>();
+			Result.error(new ErrorA());
+		});
 		expectTypeOf(resultB).toEqualTypeOf<Result.Ok<number>>();
 
 		const resultC = syncSuccess.recoverCatching(() =>
@@ -2978,9 +2981,11 @@ describe("Result", () => {
 		const resultD = asyncSuccess.recover(() => Result.error(new ErrorA()));
 		expectTypeOf(resultD).toEqualTypeOf<AsyncResult<number, never>>();
 
-		const resultE = asyncSuccess.recoverCatching(() =>
-			Result.error(new ErrorA()),
-		);
+		const resultE = asyncSuccess.recoverCatching((err) => {
+			expectTypeOf(err).toEqualTypeOf<never>();
+			return Result.error(new ErrorA());
+		});
+
 		expectTypeOf(resultE).toEqualTypeOf<AsyncResult<number, never>>();
 	});
 

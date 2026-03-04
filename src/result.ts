@@ -506,7 +506,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	// Dead-end: value is never (only failure possible), map is ignored
 	map(
 		this: AsyncResult<never, Err>,
-		transform: (value: any) => any,
+		transform: (value: Value) => any,
 	): AsyncResult<never, Err>;
 	// Generator/AsyncGenerator
 	map<This extends AnyAsyncResult, RT extends Generator | AsyncGenerator>(
@@ -573,7 +573,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	// Dead-end: value is never (only failure possible), mapCatching is ignored
 	mapCatching(
 		this: AsyncResult<never, Err>,
-		transformValue: (value: any) => any,
+		transformValue: (value: Value) => any,
 		transformError?: (error: unknown) => any,
 	): AsyncResult<never, Err>;
 	// Generator/AsyncGenerator
@@ -729,7 +729,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	// Dead-end: error is never (only success possible), recover is ignored
 	recover(
 		this: AsyncResult<Value, never>,
-		onFailure: (error: any) => any,
+		onFailure: (error: Err) => any,
 	): AsyncResult<Value, never>;
 	// Generator/AsyncGenerator
 	recover<This extends AnyAsyncResult, RT extends Generator | AsyncGenerator>(
@@ -802,7 +802,7 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 	// Dead-end: error is never (only success possible), recoverCatching is ignored
 	recoverCatching(
 		this: AsyncResult<Value, never>,
-		onFailure: (error: any) => any,
+		onFailure: (error: Err) => any,
 		transformError?: (error: unknown) => any,
 	): AsyncResult<Value, never>;
 	// Generator/AsyncGenerator
@@ -1512,7 +1512,7 @@ export class Result<Value, Err> {
 	// Dead-end: value is never (only failure possible), map is ignored
 	map(
 		this: Result<never, Err>,
-		transform: (value: any) => any,
+		transform: (value: Value) => any,
 	): OuterResult.Error<Err>;
 	// Generator/AsyncGenerator
 	map<This extends AnyResult, RT extends Generator | AsyncGenerator>(
@@ -1594,7 +1594,7 @@ export class Result<Value, Err> {
 	// Dead-end: value is never (only failure possible), mapCatching is ignored
 	mapCatching(
 		this: Result<never, Err>,
-		transformValue: (value: any) => any,
+		transformValue: (value: Value) => any,
 		transformError?: (err: unknown) => any,
 	): OuterResult.Error<Err>;
 	// Generator/AsyncGenerator
@@ -1754,7 +1754,7 @@ export class Result<Value, Err> {
 	// Dead-end: error is never (only success possible), recover is ignored
 	recover(
 		this: Result<Value, never>,
-		onFailure: (error: any) => any,
+		onFailure: (error: Err) => any,
 	): OuterResult.Ok<Value>;
 	// Generator/AsyncGenerator
 	recover<This extends AnyResult, RT extends Generator | AsyncGenerator>(
@@ -1831,7 +1831,7 @@ export class Result<Value, Err> {
 	// Dead-end: error is never (only success possible), recoverCatching is ignored
 	recoverCatching(
 		this: Result<Value, never>,
-		onFailure: (error: any) => any,
+		onFailure: (error: Err) => any,
 		transformError?: (err: unknown) => any,
 	): OuterResult.Ok<Value>;
 	// Generator/AsyncGenerator

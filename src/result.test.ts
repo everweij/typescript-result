@@ -12,6 +12,10 @@ class ErrorB extends Error {
 	readonly type = "b";
 }
 
+class ErrorC extends Error {
+	readonly type = "c";
+}
+
 const errorA = new ErrorA("some error");
 
 const sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -2111,6 +2115,20 @@ describe("Result", () => {
 				expect(outcome.value).toBe("SOME VALUE");
 			});
 
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = Result.ok(2) as Result<number, ErrorA>;
+
+				const nextResult = result.map(async (value) => {
+					if (value > 2) return Result.error(new ErrorB());
+					if (value > 1) return Result.error(new ErrorC());
+					return Result.ok("success");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string, ErrorA | ErrorB | ErrorC>
+				>();
+			});
+
 			it("cannot resolve the correct type when the returned value is a union of result-like and regular values", async () => {
 				// Note: mixed unions of plain values and Result types fall to the catch-all
 				// overload, which wraps without unwrapping. Use Result.gen() for complex
@@ -2341,6 +2359,20 @@ describe("Result", () => {
 				Result.assertOk(nextResult);
 				expect(nextResult.value).toBe(3);
 			});
+
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = Result.ok(2) as Result<number, ErrorA>;
+
+				const nextResult = result.mapCatching(async (value) => {
+					if (value > 2) return Result.error(new ErrorB());
+					if (value > 1) return Result.error(new ErrorC());
+					return Result.ok("success");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string, ErrorA | ErrorB | ErrorC | Error>
+				>();
+			});
 		});
 
 		describe("mapError", () => {
@@ -2462,6 +2494,22 @@ describe("Result", () => {
 				expect(recoveredResult.value).toBe(12);
 			});
 
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = Result.error(new CustomError()) as Result<
+					number,
+					CustomError
+				>;
+
+				const nextResult = result.recover(async (_error) => {
+					if (_error.message) return Result.error(new ErrorA());
+					return Result.ok("recovered");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string | number, ErrorA>
+				>();
+			});
+
 			it("supports a generator function as transform callback", async () => {
 				const result = Result.error(new CustomError());
 
@@ -2569,6 +2617,22 @@ describe("Result", () => {
 				const resolvedRecoveredResult = await recoveredResult;
 				Result.assertOk(resolvedRecoveredResult);
 				expect(resolvedRecoveredResult.value).toBe(12);
+			});
+
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = Result.error(new CustomError()) as Result<
+					number,
+					CustomError
+				>;
+
+				const nextResult = result.recoverCatching(async (_error) => {
+					if (_error.message) return Result.error(new ErrorA());
+					return Result.ok("recovered");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string | number, ErrorA | Error>
+				>();
 			});
 		});
 
@@ -3563,6 +3627,20 @@ describe("AsyncResult", () => {
 				Result.assertOk(nextResult);
 				expect(nextResult.value).toBe(3);
 			});
+
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = AsyncResult.ok(2) as AsyncResult<number, ErrorA>;
+
+				const nextResult = result.map(async (value) => {
+					if (value > 2) return Result.error(new ErrorB());
+					if (value > 1) return Result.error(new ErrorC());
+					return Result.ok("success");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string, ErrorA | ErrorB | ErrorC>
+				>();
+			});
 		});
 
 		describe("mapCatching", () => {
@@ -3637,6 +3715,20 @@ describe("AsyncResult", () => {
 				Result.assertError(result);
 
 				expect(result.error).toBeInstanceOf(ErrorB);
+			});
+
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = AsyncResult.ok(2) as AsyncResult<number, ErrorA>;
+
+				const nextResult = result.mapCatching(async (value) => {
+					if (value > 2) return Result.error(new ErrorB());
+					if (value > 1) return Result.error(new ErrorC());
+					return Result.ok("success");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string, ErrorA | ErrorB | ErrorC | Error>
+				>();
 			});
 		});
 
@@ -3795,6 +3887,22 @@ describe("AsyncResult", () => {
 				Result.assertOk(resolvedRecoveredResult);
 				expect(resolvedRecoveredResult.value).toBe(12);
 			});
+
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = AsyncResult.error(new CustomError()) as AsyncResult<
+					number,
+					CustomError
+				>;
+
+				const nextResult = result.recover(async (_error) => {
+					if (_error.message) return Result.error(new ErrorA());
+					return Result.ok("recovered");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string | number, ErrorA>
+				>();
+			});
 		});
 
 		describe("recoverCatching", () => {
@@ -3812,6 +3920,22 @@ describe("AsyncResult", () => {
 				});
 				Result.assertError(recoveredResult);
 				expect(recoveredResult.error.message).toBe("inside transform function");
+			});
+
+			it("distributes value and error types from async callback returning union of results", async () => {
+				const result = AsyncResult.error(new CustomError()) as AsyncResult<
+					number,
+					CustomError
+				>;
+
+				const nextResult = result.recoverCatching(async (_error) => {
+					if (_error.message) return Result.error(new ErrorA());
+					return Result.ok("recovered");
+				});
+
+				expectTypeOf(nextResult).toEqualTypeOf<
+					AsyncResult<string | number, ErrorA | Error>
+				>();
 			});
 		});
 	});

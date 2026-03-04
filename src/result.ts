@@ -538,6 +538,11 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			value: InferValue<This>,
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 	): AsyncResult<V, E | InferError<This>>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	map<This extends AnyAsyncResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		transform: (value: InferValue<This>) => Promise<RT>,
+	): AsyncResult<InferValue<RT>, InferError<This> | InferError<RT>>;
 	// Returns Promise<V>
 	map<This extends AnyAsyncResult, V>(
 		this: This,
@@ -614,6 +619,16 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 		transformError?: (error: unknown) => ErrorType,
 	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	mapCatching<
+		This extends AnyAsyncResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		transformValue: (value: InferValue<This>) => Promise<RT>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<InferValue<RT>, InferError<This> | InferError<RT> | ErrorType>;
 	// Returns Promise<V>
 	mapCatching<This extends AnyAsyncResult, V, ErrorType = NativeError>(
 		this: This,
@@ -746,6 +761,11 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 			error: InferError<This>,
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 	): AsyncResult<V | InferValue<This>, E>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	recover<This extends AnyAsyncResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<RT>,
+	): AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT>>;
 	// Returns Promise<V>
 	recover<This extends AnyAsyncResult, V>(
 		this: This,
@@ -828,6 +848,16 @@ export class AsyncResult<Value, Err> extends Promise<OuterResult<Value, Err>> {
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 		transformError?: (error: unknown) => ErrorType,
 	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	recoverCatching<
+		This extends AnyAsyncResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<RT>,
+		transformError?: (error: unknown) => ErrorType,
+	): AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT> | ErrorType>;
 	// Returns Promise<V>
 	recoverCatching<This extends AnyAsyncResult, V, ErrorType = NativeError>(
 		this: This,
@@ -1523,6 +1553,11 @@ export class Result<Value, Err> {
 			value: InferValue<This>,
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 	): AsyncResult<V, E | InferError<This>>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	map<This extends AnyResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		transform: (value: InferValue<This>) => Promise<RT>,
+	): AsyncResult<InferValue<RT>, InferError<This> | InferError<RT>>;
 	// Returns Promise<V>
 	map<This extends AnyResult, V>(
 		this: This,
@@ -1617,6 +1652,16 @@ export class Result<Value, Err> {
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 		transformError?: (err: unknown) => ErrorType,
 	): AsyncResult<V, E | InferError<This> | ErrorType>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	mapCatching<
+		This extends AnyResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		transformValue: (value: InferValue<This>) => Promise<RT>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<InferValue<RT>, InferError<This> | InferError<RT> | ErrorType>;
 	// Returns Promise<V>
 	mapCatching<This extends AnyResult, V, ErrorType = NativeError>(
 		this: This,
@@ -1750,6 +1795,11 @@ export class Result<Value, Err> {
 			error: InferError<This>,
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 	): AsyncResult<V | InferValue<This>, E>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	recover<This extends AnyResult, RT extends AnyResult | AnyAsyncResult>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<RT>,
+	): AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT>>;
 	// Returns Promise<V>
 	recover<This extends AnyResult, V>(
 		this: This,
@@ -1839,6 +1889,16 @@ export class Result<Value, Err> {
 		) => Promise<Result<V, E> | AsyncResult<V, E>>,
 		transformError?: (err: unknown) => ErrorType,
 	): AsyncResult<V | InferValue<This>, E | ErrorType>;
+	// Returns Promise<union of Result/AsyncResult types> — distributive fallback
+	recoverCatching<
+		This extends AnyResult,
+		RT extends AnyResult | AnyAsyncResult,
+		ErrorType = NativeError,
+	>(
+		this: This,
+		onFailure: (error: InferError<This>) => Promise<RT>,
+		transformError?: (err: unknown) => ErrorType,
+	): AsyncResult<InferValue<RT> | InferValue<This>, InferError<RT> | ErrorType>;
 	// Returns Promise<V>
 	recoverCatching<This extends AnyResult, V, ErrorType = NativeError>(
 		this: This,

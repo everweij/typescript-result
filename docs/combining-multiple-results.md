@@ -102,3 +102,65 @@ const result = Result.all(
   function *() { return "i" as const; }
 ); // AsyncResult<["a", "b", "c", "d", "e", "f", "g", "h", "i"], Error>
 ```
+
+## Result.any
+
+Where `Result.all` requires **every** operation to succeed, `Result.any` requires just **one**. Think of it as the `Promise.any` equivalent for results: it returns the **first success**, or a **tuple of all errors** if everything fails. This makes it ideal for fallback patterns where you have multiple ways to get the same data:
+
+```ts twoslash
+import { Result, AsyncResult } from "typescript-result";
+
+class CacheMissError extends Error {
+  readonly type = "cache-miss";
+}
+
+class DbError extends Error {
+  readonly type = "db-error";
+}
+
+type User = {
+  id: number;
+  name: string;
+};
+
+declare function fetchFromCache(id: number): Result<User, CacheMissError>;
+declare function fetchFromDb(id: number): AsyncResult<User, DbError>;
+
+// ---cut-before---
+const user = Result.any(
+  fetchFromCache(1),  // fast but might miss
+  fetchFromDb(1),     // slower but reliable
+);
+```
+
+<div class="spacer" />
+
+Just like `Result.all`, `Result.any` is polymorphic — it accepts literal values, functions, `Result`/`AsyncResult` instances, promises, and generators in any combination:
+
+```ts twoslash
+import { Result } from "typescript-result";
+
+const result = Result.any(
+  Result.error("nope"),
+  () => Result.error("also nope"),
+  Promise.resolve("fallback value"),
+  42,
+); // AsyncResult<string | number, [string, never, never, never]>
+```
+
+::: info
+`Result.any` follows the same sync/async rules as `Result.all`: if all arguments are synchronous it returns a `Result`, otherwise it returns an `AsyncResult`.
+:::
+
+### Result.anyCatching
+
+If any of your fallback operations might throw, use `Result.anyCatching` to catch those exceptions and include them in the error tuple instead of letting them propagate:
+
+```ts twoslash
+import { Result } from "typescript-result";
+
+const result = Result.anyCatching(
+  () => { throw new Error("boom"); },
+  () => Result.ok("recovered"),
+);
+```

@@ -24,6 +24,7 @@ import {
 } from "./result.js";
 import type {
 	AccountForThrowing,
+	AccountForThrowingPerPosition,
 	AnyAsyncResult,
 	AnyOuterResult,
 	AnyResult,
@@ -56,6 +57,7 @@ import type {
  * - {@linkcode ResultFactory.try | Result.try} — execute a function and catch exceptions
  * - {@linkcode ResultFactory.gen | Result.gen} — run a generator function with `yield*` short-circuiting
  * - {@linkcode ResultFactory.all | Result.all} — combine multiple operations (like `Promise.all`)
+ * - {@linkcode ResultFactory.any | Result.any} — return first success among multiple operations (like `Promise.any`)
  * - {@linkcode ResultFactory.wrap | Result.wrap} — wrap an existing function to return a result
  * - {@linkcode ResultFactory.fromAsync | Result.fromAsync} — lift a Promise into an AsyncResult
  */
@@ -117,6 +119,145 @@ export class ResultFactory {
 		possibleAsyncResult: unknown,
 	): possibleAsyncResult is AnyAsyncResult {
 		return isAsyncResultInstance(possibleAsyncResult);
+	}
+
+	/**
+	 * @internal
+	 */
+	static anyInternal(
+		items: any[],
+		opts: { catching: boolean },
+	): AnyResult | AnyAsyncResult {
+		const runner = opts.catching ? ResultFactory.try : run;
+
+		const flattened: Array<AnyResult | AnyAsyncResult> = [];
+
+		let isAsync = items.some(isPromise);
+		let hasSuccess = false;
+
+		for (const item of items) {
+			if (isFunction(item)) {
+				if (hasSuccess) {
+					continue;
+				}
+
+				const returnValue = runner(item as AnyFunction);
+
+				if (isResultInstance(returnValue) && returnValue.ok) {
+					hasSuccess = true;
+					if (!isAsync) {
+						return returnValue;
+					}
+				}
+
+				if (isAsyncResultInstance(returnValue)) {
+					isAsync = true;
+				}
+
+				flattened.push(returnValue);
+			} else if (isResultInstance(item)) {
+				if (item.ok) {
+					hasSuccess = true;
+					if (!isAsync) {
+						return item;
+					}
+				}
+
+				flattened.push(item);
+			} else if (isAsyncResultInstance(item)) {
+				isAsync = true;
+				flattened.push(item);
+			} else if (isPromise(item)) {
+				isAsync = true;
+
+				flattened.push(
+					opts.catching
+						? AsyncResult.fromPromiseCatching(item)
+						: AsyncResult.fromPromise(item),
+				);
+			} else {
+				// literal value = immediate success
+				hasSuccess = true;
+				if (!isAsync) {
+					return createOk(item);
+				}
+				flattened.push(createOk(item));
+			}
+		}
+
+		if (isAsync) {
+			return new AsyncResult((resolve, reject) => {
+				const asyncResults: AnyAsyncResult[] = [];
+				const asyncIndexes: number[] = [];
+
+				for (let i = 0; i < flattened.length; i++) {
+					const item = flattened[i];
+					if (isAsyncResultInstance(item)) {
+						asyncResults.push(item);
+						asyncIndexes.push(i);
+					}
+				}
+
+				// Check if any sync result already succeeded
+				for (let i = 0; i < flattened.length; i++) {
+					const item = flattened[i];
+					if (isResultInstance(item) && item.ok) {
+						// Race: resolve immediately but still need to wait for async
+						// items to avoid unhandled rejections. However, since we found
+						// a sync success, we can resolve right away.
+						// Consume async results to prevent unhandled promise rejections
+						Promise.all(asyncResults).catch(/* c8 ignore next */ () => {});
+						resolve(item);
+						return;
+					}
+				}
+
+				let settled = 0;
+				let done = false;
+
+				const tryResolve = (result: AnyResult) => {
+					if (done) return;
+					if (result.ok) {
+						done = true;
+						// Consume remaining async results to prevent unhandled rejections
+						Promise.all(asyncResults).catch(/* c8 ignore next */ () => {});
+						resolve(result);
+						return;
+					}
+					settled++;
+					if (settled === asyncResults.length) {
+						// All async settled as errors — merge with sync results
+						const merged = [...flattened] as AnyResult[];
+						for (let i = 0; i < resolvedResults.length; i++) {
+							merged[asyncIndexes[i]!] = resolvedResults[i]!;
+						}
+						resolve(createError(merged.map((r) => r.errorOrNull())));
+					}
+				};
+
+				const resolvedResults: AnyResult[] = new Array(asyncResults.length);
+
+				for (let i = 0; i < asyncResults.length; i++) {
+					asyncResults[i]!.then((result) => {
+						resolvedResults[i] = result;
+						tryResolve(result);
+					})
+						/* c8 ignore start -- only fires when catching=false and async rejects */
+						.catch((reason) => {
+							if (!done) {
+								done = true;
+								reject(reason);
+							}
+						});
+					/* c8 ignore stop */
+				}
+			});
+		}
+
+		// All sync, no success found → collect all errors
+		return createError(
+			(flattened as AnyResult[]).map((result) => result.errorOrNull()),
+		);
 	}
 
 	/**
@@ -312,6 +453,78 @@ export class ResultFactory {
 			: OuterResult<
 					ExtractValues<Unwrapped>,
 					ExtractErrors<Unwrapped>[number] | AccountForThrowing<Items>
+				>;
+	}
+
+	/**
+	 * Similar to {@linkcode Promise.any}, but for results. The dual of {@linkcode Result.all}.
+	 * Returns the first successful value among the provided items, or a tuple of all errors if everything fails.
+	 * Each argument can be a mixture of literal values, functions, {@linkcode Result} or {@linkcode AsyncResult} instances, or {@linkcode Promise}.
+	 *
+	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}.
+	 * @returns the first successful value, or a tuple of all errors.
+	 *
+	 * > [!NOTE]
+	 * > Any exceptions that might be thrown are not caught, so it is your responsibility
+	 * > to handle these exceptions. Please refer to {@linkcode Result.anyCatching} for a version that catches exceptions
+	 * > and encapsulates them in a failed result.
+	 *
+	 * @example Returning the first success
+	 * ```ts
+	 * declare function fetchFromCache(): Result<User, CacheMissError>;
+	 * declare function fetchFromDb(): Result<User, DbError>;
+	 *
+	 * const result = Result.any(fetchFromCache, fetchFromDb); // Result<User, [CacheMissError, DbError]>
+	 * ```
+	 *
+	 * @example Mixing different input types
+	 * ```ts
+	 * const result = Result.any(
+	 *   Result.error("not found"),
+	 *   () => Result.ok("fallback"),
+	 * ); // Result<string, [string, never]>
+	 * ```
+	 */
+	static any<Items extends any[], Unwrapped extends any[] = UnwrapList<Items>>(
+		...items: Items
+	) {
+		return ResultFactory.anyInternal(items, {
+			catching: false,
+		}) as ListContainsAsync<Items> extends true
+			? AsyncResult<ExtractValues<Unwrapped>[number], ExtractErrors<Unwrapped>>
+			: OuterResult<ExtractValues<Unwrapped>[number], ExtractErrors<Unwrapped>>;
+	}
+
+	/**
+	 * Similar to {@linkcode Result.any}, but catches any exceptions that might be thrown during the operations
+	 * and encapsulates them in a failed result. The error type of thrown exceptions defaults to `Error` unless
+	 * a `transformError` is provided at the call-site level (e.g. via wrapped functions).
+	 *
+	 * @param items one or multiple literal value, function, {@linkcode Result} or {@linkcode AsyncResult} instance, or {@linkcode Promise}
+	 * @returns the first successful value, or a tuple of all errors (including caught exceptions)
+	 *
+	 * @example Catching a thrown exception
+	 * ```ts
+	 * const result = Result.anyCatching(
+	 *   () => { throw new Error("boom"); },
+	 *   Result.ok(42),
+	 * ); // Result<never | number, [Error, never]>
+	 * ```
+	 */
+	static anyCatching<
+		Items extends any[],
+		Unwrapped extends any[] = UnwrapList<Items>,
+	>(...items: Items) {
+		return ResultFactory.anyInternal(items, {
+			catching: true,
+		}) as ListContainsAsync<Items> extends true
+			? AsyncResult<
+					ExtractValues<Unwrapped>[number],
+					AccountForThrowingPerPosition<Items, ExtractErrors<Unwrapped>>
+				>
+			: OuterResult<
+					ExtractValues<Unwrapped>[number],
+					AccountForThrowingPerPosition<Items, ExtractErrors<Unwrapped>>
 				>;
 	}
 

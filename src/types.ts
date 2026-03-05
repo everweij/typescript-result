@@ -146,3 +146,12 @@ export type AccountForThrowing<T extends any[]> = {
 }[number] extends false
 	? never
 	: NativeError;
+
+export type AccountForThrowingPerPosition<
+	Items extends any[],
+	Errors extends any[],
+> = {
+	[I in keyof Items]: Items[I] extends AnyFunction | AnyPromise
+		? Errors[I & keyof Errors] | NativeError
+		: Errors[I & keyof Errors];
+};

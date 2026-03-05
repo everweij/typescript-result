@@ -813,6 +813,313 @@ describe("Result", () => {
 		});
 	});
 
+	describe("Result.anyCatching", () => {
+		it("returns the first successful value among multiple ok results", () => {
+			const result = Result.anyCatching(
+				Result.ok("a"),
+				Result.ok("b"),
+				Result.ok("c"),
+			);
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<string, [never, never, never]>
+			>();
+
+			Result.assertOk(result);
+			expect(result.value).toBe("a");
+		});
+
+		it("returns the first successful value when mixed with failures", () => {
+			const result = Result.anyCatching(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				Result.ok("b"),
+				Result.ok("c"),
+			);
+
+			Result.assertOk(result);
+			expect(result.value).toBe("b");
+		});
+
+		it("returns a tuple of all errors when everything fails", () => {
+			const result = Result.anyCatching(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				Result.error(new ErrorB()) as Result<string, ErrorB>,
+			);
+
+			expectTypeOf(result).toEqualTypeOf<Result<string, [ErrorA, ErrorB]>>();
+
+			Result.assertError(result);
+			expect(result.error).toHaveLength(2);
+			expect(result.error[0]).toBeInstanceOf(ErrorA);
+			expect(result.error[1]).toBeInstanceOf(ErrorB);
+		});
+
+		it("returns a literal value as immediate success", () => {
+			const result = Result.anyCatching("a", "b");
+
+			expectTypeOf(result).toEqualTypeOf<Result<string, [never, never]>>();
+
+			Result.assertOk(result);
+			expect(result.value).toBe("a");
+		});
+
+		it("returns first success from functions", () => {
+			const result = Result.anyCatching(
+				() => Result.error(new ErrorA()) as Result<string, ErrorA>,
+				() => Result.ok("b"),
+			);
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<string, [ErrorA | Error, never | Error]>
+			>();
+
+			Result.assertOk(result);
+			expect(result.value).toBe("b");
+		});
+
+		it("short-circuits: functions after first success not called", () => {
+			const notCalled = vi.fn(() => Result.ok("should not be called"));
+
+			const result = Result.anyCatching(Result.ok("a"), notCalled);
+
+			Result.assertOk(result);
+			expect(result.value).toBe("a");
+			expect(notCalled).not.toHaveBeenCalled();
+		});
+
+		it("short-circuits on literal value: functions after not called", () => {
+			const notCalled = vi.fn(() => Result.ok("should not be called"));
+
+			const result = Result.anyCatching("a", notCalled);
+
+			Result.assertOk(result);
+			expect(result.value).toBe("a");
+			expect(notCalled).not.toHaveBeenCalled();
+		});
+
+		it("catches thrown exceptions as errors in tuple", () => {
+			function functionThatThrows(): string {
+				throw new CustomError();
+			}
+
+			const result = Result.anyCatching(
+				functionThatThrows,
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+			);
+
+			expectTypeOf(result).toEqualTypeOf<
+				Result<string, [never | Error, ErrorA]>
+			>();
+
+			Result.assertError(result);
+			expect(result.error).toHaveLength(2);
+			const errors = result.error as unknown[];
+			expect(errors[0]).toBeInstanceOf(CustomError);
+			expect(errors[1]).toBeInstanceOf(ErrorA);
+		});
+
+		it("returns async result when async items are present", async () => {
+			const asyncResult = Result.anyCatching(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				Promise.resolve("b"),
+			);
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<string, [ErrorA, never | Error]>
+			>();
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe("b");
+		});
+
+		it("returns first async success (completion-time semantics)", async () => {
+			const asyncResult = Result.anyCatching(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				Result.try(async () => {
+					await sleep();
+					return "slow";
+				}),
+				Result.try(async () => "fast"),
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe("fast");
+		});
+
+		it("sync success wins over async items", async () => {
+			const asyncResult = Result.anyCatching(
+				Result.ok("sync"),
+				Promise.resolve("async"),
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe("sync");
+		});
+
+		it("skips functions after first success when async items are present", async () => {
+			const notCalled = vi.fn(() => Result.ok("should not be called"));
+
+			const asyncResult = Result.anyCatching(
+				Promise.resolve("async"),
+				() => Result.ok("sync-success"),
+				notCalled,
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(notCalled).not.toHaveBeenCalled();
+		});
+
+		it("handles literal value after async item", async () => {
+			const asyncResult = Result.anyCatching(
+				Promise.resolve("async"),
+				"literal",
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe("literal");
+		});
+
+		it("first async success wins and subsequent async results are ignored", async () => {
+			const asyncResult = Result.anyCatching(
+				Result.try(async () => "first"),
+				Result.try(async () => "second"),
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe("first");
+		});
+
+		it("collects all errors when all async items fail", async () => {
+			const asyncResult = Result.anyCatching(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				async (): Promise<string> => {
+					throw new CustomError();
+				},
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				const errors = result.error as unknown[];
+				expect(errors).toHaveLength(2);
+				expect(errors[0]).toBeInstanceOf(ErrorA);
+				expect(errors[1]).toBeInstanceOf(CustomError);
+			}
+		});
+
+		it("collects all errors when multiple async items fail", async () => {
+			const asyncResult = Result.anyCatching(
+				() =>
+					Result.try(async (): Promise<string> => {
+						throw new ErrorA();
+					}),
+				() =>
+					Result.try(async (): Promise<string> => {
+						throw new ErrorB();
+					}),
+			);
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				const errors = result.error as unknown[];
+				expect(errors).toHaveLength(2);
+				expect(errors[0]).toBeInstanceOf(ErrorA);
+				expect(errors[1]).toBeInstanceOf(ErrorB);
+			}
+		});
+
+		it("does not track any thrown error when not needed", () => {
+			const result = Result.anyCatching(Result.ok("a"));
+			expectTypeOf(result).toEqualTypeOf<Result<string, [never]>>();
+		});
+
+		it("handles empty arguments", () => {
+			const result = Result.anyCatching();
+
+			Result.assertError(result);
+			expect(result.error).toEqual([]);
+		});
+	});
+
+	describe("Result.any", () => {
+		it("returns the first successful value", () => {
+			const result = Result.any(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				Result.ok("b"),
+			);
+
+			Result.assertOk(result);
+			expect(result.value).toBe("b");
+		});
+
+		it("returns a literal value as immediate success", () => {
+			const result = Result.any("hello");
+
+			Result.assertOk(result);
+			expect(result.value).toBe("hello");
+		});
+
+		it("combines sync and async into async result", async () => {
+			const asyncResult = Result.any(
+				Result.error(new ErrorA()) as Result<string, ErrorA>,
+				Promise.resolve("async-value"),
+			);
+
+			expectTypeOf(asyncResult).toEqualTypeOf<
+				AsyncResult<string, [ErrorA, never]>
+			>();
+
+			expect(asyncResult).toBeInstanceOf(AsyncResult);
+			const result = await asyncResult;
+			Result.assertOk(result);
+			expect(result.value).toBe("async-value");
+		});
+
+		it("does not track async exceptions but throws them instead", async () => {
+			await expect(() =>
+				Result.any(
+					Result.error(new ErrorA()) as Result<string, ErrorA>,
+					async (): Promise<string> => {
+						throw new CustomError();
+					},
+				),
+			).rejects.toBeInstanceOf(CustomError);
+		});
+
+		it("does not track sync exceptions but throws them instead", () => {
+			expect(() =>
+				Result.any(
+					Result.error(new ErrorA()) as Result<string, ErrorA>,
+					(): string => {
+						throw new CustomError();
+					},
+				),
+			).toThrow(CustomError);
+		});
+
+		it("returns an error with empty tuple when called with no arguments", () => {
+			const result = Result.any();
+
+			Result.assertError(result);
+			expect(result.error).toEqual([]);
+		});
+	});
+
 	describe("Result.fromAsync", () => {
 		it("transforms a promise holding a regular value into an async result", async () => {
 			const asyncResult = Result.fromAsync(Promise.resolve(12));
